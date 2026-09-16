@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evals>
+  <qa_pair>
+    <question>Using devbrain_repo_map and devbrain_find_todos, what stack does fixtures/npm-react use and where is its explicit unfinished work?</question>
+    <answer>The fixture is a single-package TypeScript repository using npm and React, evidenced by package-lock.json and the React dependency in package.json. One TODO appears in src/main.tsx on line 1.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_repo_map and devbrain_project_health, is fixtures/pnpm-monorepo a monorepo and what onboarding hygiene concerns are visible?</question>
+    <answer>It is a pnpm TypeScript/React monorepo with apps/* and packages/* workspace patterns. The fixture has no README or .gitignore and no installed node_modules environment, so those observations are reported as red flags; no release judgment is made.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_repo_map and devbrain_dependency_audit, what can be proven about fixtures/python-poetry and its dependency maintenance state?</question>
+    <answer>The fixture is a Python single-package project using Poetry with Django declared in pyproject.toml. Direct inventory is complete and includes Django; outdated and vulnerability checks are not run because a stable supported structured Poetry check is unavailable, so the audit is partial rather than falsely clean.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_repo_map and devbrain_find_todos, what technologies and debt markers are present in fixtures/mixed-stack?</question>
+    <answer>The fixture contains JavaScript and Python, has conflicting npm and Yarn lockfile evidence plus pip metadata, and detects Express and Flask from dependency metadata. It contains two markers: HACK in src/server.js and XXX in worker.py.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_project_health and devbrain_git_history on the temporary Git test repository described by the test suite, what recent work and working state can be established?</question>
+    <answer>The test repository has two clean commits named first and second. A historyPath scoped to one.txt returns only the first commit, while project health can report its current branch, clean counts, missing upstream observation, and last commit metadata. These expected facts are created deterministically in tests/tools/git-history.test.ts rather than fabricated.</answer>
+  </qa_pair>
+</evals>
