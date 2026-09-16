@@ -31,4 +31,14 @@ Verified on 2026-09-16.
 - Process timeouts force-kill the spawned process; descendant-process cleanup remains platform-dependent.
 - Very large non-Git traversals stop at the file-discovery ceiling and return `partial`; very large Git listings are constrained by subprocess output limits.
 
-Git commit SHA: **unavailable** — the DevBrain workspace is not a Git repository, and verification does not fabricate one.
+## Verified baseline
+
+- Commit SHA: `a9ebc678c646e106677f1f40522c9194c334383b` (short `a9ebc67`)
+- Tag: `v0.1.0-phase1` (annotated; tag object `5fe70c81445b32aaca1447ac631e0aacce739f03`)
+- Branch: `master`
+- Working tree at verification: clean
+
+The gates above were verified against the tree recorded in `a9ebc67`. This file
+was amended afterwards to record that SHA, so the commit carrying this text is
+necessarily a later one; `v0.1.0-phase1` continues to point at the verified
+baseline `a9ebc67`.
