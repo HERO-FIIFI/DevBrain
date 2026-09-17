@@ -6,6 +6,12 @@ import { findTodos, findTodosInput, findTodosOutput } from './tools/find-todos.j
 import { gitHistory, gitHistoryInput, gitHistoryOutput } from './tools/git-history.js';
 import { projectHealth, projectHealthInput, projectHealthOutput } from './tools/project-health.js';
 import { repoMap, repoMapInput, repoMapOutput } from './tools/repo-map.js';
+import {inspectDocker,inspectDockerInput,inspectDockerOutput} from './tools/inspect-docker.js';
+import {runBuild,runBuildInput} from './tools/run-build.js';
+import {runTests,runTestsInput} from './tools/run-tests.js';
+import {runTargetedTests,runTargetedTestsInput} from './tools/run-targeted-tests.js';
+import {runLint,runLintInput} from './tools/run-lint.js';
+import {executionAnnotations,executionOutputSchema} from './tools/run-common.js';
 import { redact } from './lib/redaction.js';
 import { summary } from './tools/common.js';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +30,11 @@ export function createServer(): McpServer {
   server.registerTool('devbrain_git_history', { description: 'Return bounded commit metadata without patch contents.', inputSchema: gitHistoryInput, outputSchema: gitHistoryOutput, annotations: readOnly }, async (input) => response(await gitHistory(input)));
   server.registerTool('devbrain_dependency_audit', { description: 'Inventory direct dependencies and attempt update and vulnerability checks with explicit degraded states.', inputSchema: dependencyAuditInput, outputSchema: dependencyAuditOutput, annotations: { ...readOnly, openWorldHint: true } }, async (input) => response(await dependencyAudit(input)));
   server.registerTool('devbrain_find_todos', { description: 'Find bounded technical-debt markers in repository-owned files.', inputSchema: findTodosInput, outputSchema: findTodosOutput, annotations: readOnly }, async (input) => response(await findTodos(input)));
+  server.registerTool('devbrain_run_build',{description:'Discover, authorize, and run the pinned build capability in a trusted Git repository.',inputSchema:runBuildInput,outputSchema:executionOutputSchema,annotations:executionAnnotations},async(input)=>response(await runBuild(input)));
+  server.registerTool('devbrain_run_tests',{description:'Discover, authorize, and run the pinned full test capability in a trusted Git repository.',inputSchema:runTestsInput,outputSchema:executionOutputSchema,annotations:executionAnnotations},async(input)=>response(await runTests(input)));
+  server.registerTool('devbrain_run_targeted_tests',{description:'Run one validated repository-contained test file through an authorized pinned test capability.',inputSchema:runTargetedTestsInput,outputSchema:executionOutputSchema,annotations:executionAnnotations},async(input)=>response(await runTargetedTests(input)));
+  server.registerTool('devbrain_run_lint',{description:'Discover, authorize, and run the pinned lint capability in a trusted Git repository.',inputSchema:runLintInput,outputSchema:executionOutputSchema,annotations:executionAnnotations},async(input)=>response(await runLint(input)));
+  server.registerTool('devbrain_inspect_docker',{description:'Observationally inspect Docker availability, containers, images, health, ports, and sanitized mounts.',inputSchema:inspectDockerInput,outputSchema:inspectDockerOutput,annotations:readOnly},async(input)=>response(await inspectDocker(input)));
   return server;
 }
 

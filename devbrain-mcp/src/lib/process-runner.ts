@@ -2,6 +2,16 @@ import { spawn } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 import { safeError } from './redaction.js';
 
+function killTree(pid: number | undefined): void {
+  if (!pid) return;
+  if (process.platform === 'win32') {
+    const killer = spawn('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { shell: false, windowsHide: true, stdio: 'ignore' });
+    killer.on('error', () => { /* best effort; direct kill below remains */ });
+  } else {
+    try { process.kill(-pid, 'SIGKILL'); } catch { try { process.kill(pid, 'SIGKILL'); } catch { /* already exited */ } }
+  }
+}
+
 export interface ProcessOptions {
   executable: string;
   args?: string[];
@@ -9,6 +19,7 @@ export interface ProcessOptions {
   timeoutMs?: number;
   maxStdoutBytes?: number;
   maxStderrBytes?: number;
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface ProcessResult {
@@ -38,7 +49,8 @@ export async function runProcess(options: ProcessOptions): Promise<ProcessResult
     try {
       child = spawn(options.executable, options.args ?? [], {
         cwd, shell: false, windowsHide: true,
-        env: process.env,
+        detached: process.platform !== 'win32',
+        env: options.env ?? process.env,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (error) {
@@ -54,7 +66,7 @@ export async function runProcess(options: ProcessOptions): Promise<ProcessResult
       return Buffer.concat([current, chunk.subarray(0, limit - current.length)]);
     };
     const enforceLimit = () => {
-      if (!outputTruncated) { outputTruncated = true; child.kill('SIGKILL'); }
+      if (!outputTruncated) { outputTruncated = true; killTree(child.pid); child.kill('SIGKILL'); }
     };
     child.stdout.on('data', (chunk: Buffer) => {
       const exceeded = stdout.length + chunk.length > stdoutLimit;
@@ -71,6 +83,6 @@ export async function runProcess(options: ProcessOptions): Promise<ProcessResult
       status: timedOut ? 'timeout' : outputTruncated ? 'output_limit' : exitCode === 0 ? 'completed' : 'failed',
       exitCode, signal, stdout: stdout.toString('utf8'), stderr: stderr.toString('utf8'), timedOut, outputTruncated,
     }));
-    const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, timeoutMs);
+    const timer = setTimeout(() => { timedOut = true; killTree(child.pid); child.kill('SIGKILL'); }, timeoutMs);
   });
 }

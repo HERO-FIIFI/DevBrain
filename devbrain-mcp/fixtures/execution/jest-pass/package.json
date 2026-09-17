@@ -1,0 +1,1 @@
+{"name":"jest-pass","private":true,"scripts":{"test":"node run.cjs"},"devDependencies":{"jest":"1.0.0"}}

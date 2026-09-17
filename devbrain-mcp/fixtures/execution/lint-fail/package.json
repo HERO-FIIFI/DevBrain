@@ -1,0 +1,1 @@
+{"name":"lint-fail","private":true,"scripts":{"lint":"node -e \"console.error('1 error');process.exit(1)\""}}

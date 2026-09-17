@@ -6,7 +6,8 @@
   "description": "Read-only repository intelligence MCP server",
   "main": "dist/index.js",
   "bin": {
-    "devbrain-mcp": "dist/index.js"
+    "devbrain-mcp": "dist/index.js",
+    "devbrain": "dist/admin.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
