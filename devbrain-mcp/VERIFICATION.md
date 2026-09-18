@@ -230,3 +230,7 @@ All calls below went through the official `@modelcontextprotocol/inspector` 2.7.
 ## Phase 3 baseline
 
 - Phase 2 baseline: `bd66ce3eff2b7228d452061a9ee8fc339b5a72a5` (`v0.2.0-phase2`).
+- Verified implementation SHA: `09728ae45de0568b72be6601bef5c3d58a6deacf`.
+- Final documentation SHA: the commit containing this necessarily self-referential line; resolve it without fabrication as the commit target of `v0.3.0-phase3` (`git rev-list -n 1 v0.3.0-phase3`).
+- Final tag: annotated `v0.3.0-phase3`, identifying the documentation-complete baseline.
+- Working tree at verification: clean. The unrelated `site/` landing page was committed separately as `e04825b` before Phase 3 closure.
