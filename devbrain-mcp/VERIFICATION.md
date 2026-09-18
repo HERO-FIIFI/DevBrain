@@ -137,6 +137,6 @@ Acceptance remediation verified on 2026-09-17 and 2026-09-18. The pre-remediatio
 ## Phase 2 baseline
 
 - Pre-remediation SHA: `0517a7e62f1e0f23e319302436c19ad64c28752e`.
-- Verified implementation SHA: recorded in the documentation follow-up after the implementation commit.
-- Final documentation SHA: recorded in the documentation follow-up.
-- Final tag: `v0.2.0-phase2` will identify the documentation-complete baseline.
+- Verified implementation SHA: `1912ad3e45472497e1ed89bfbdd0fc04db04b19e`.
+- Final documentation SHA: the commit containing this necessarily self-referential line; resolve it without fabrication as the commit target of `v0.2.0-phase2` (`git rev-list -n 1 v0.2.0-phase2`).
+- Final tag: annotated `v0.2.0-phase2`, identifying the documentation-complete baseline.
