@@ -10,24 +10,77 @@ export interface ParsedResult {
   failingTestsTotal: number;
   failingTestsReturned: number;
   failingTestsTruncated: boolean;
-  parseMethod: 'text_regex' | 'exit_code_only' | 'unknown';
-  parseConfidence: 'medium' | 'low' | 'unknown';
+  parseMethod: 'json_reporter' | 'junit_xml' | 'text_regex' | 'exit_code_only' | 'unknown';
+  parseConfidence: 'high' | 'medium' | 'low' | 'unknown';
 }
 
-const number = (text: string, label: string) => Number(new RegExp(`(\\d+)\\s+${label}`, 'i').exec(text)?.[1] ?? 0);
-export function parseResult(framework: string | undefined, stdout: string, stderr: string, exitCode: number | null, executionStatus: ExecutionStatus): { resultStatus: ResultStatus; summary: ParsedResult } {
-  const text = `${stdout}\n${stderr}`; const status: ResultStatus = executionStatus !== 'completed' ? 'unknown' : exitCode === 0 ? 'passed' : 'failed';
+const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'g');
+const count = (text: string, label: string) => Number(new RegExp(`(\\d+)\\s+${label}\\b`, 'i').exec(text)?.[1] ?? 0);
+const base = (framework: string, method: ParsedResult['parseMethod'], confidence: ParsedResult['parseConfidence']) => ({
+  framework, failingTests: [], failingTestsTotal: 0, failingTestsReturned: 0, failingTestsTruncated: false, parseMethod: method, parseConfidence: confidence,
+});
+
+function parseJson(framework: string, stdout: string, stderr: string): ParsedResult | null {
+  for (const candidate of [stdout.trim(), stderr.trim()]) {
+    if (!candidate.startsWith('{')) continue;
+    try {
+      const report = JSON.parse(candidate) as Record<string, unknown>;
+      const values = [report.numPassedTests, report.numFailedTests, report.numPendingTests];
+      if (!values.some((value) => typeof value === 'number')) continue;
+      const passed = typeof values[0] === 'number' ? values[0] : 0;
+      const failed = typeof values[1] === 'number' ? values[1] : 0;
+      const skipped = typeof values[2] === 'number' ? values[2] : 0;
+      return { ...base(framework, 'json_reporter', 'high'), passed, failed, skipped, errors: typeof report.numRuntimeErrorTestSuites === 'number' ? report.numRuntimeErrorTestSuites : 0, failingTestsTotal: failed, failingTestsTruncated: failed > 0 };
+    } catch { /* Not machine-readable JSON; continue down the parsing hierarchy. */ }
+  }
+  return null;
+}
+
+const attribute = (tag: string, name: string) => Number(new RegExp(`\\b${name}=["'](\\d+)["']`, 'i').exec(tag)?.[1] ?? 0);
+function parseJunit(framework: string, stdout: string, stderr: string): ParsedResult | null {
+  const text = `${stdout}\n${stderr}`.trim();
+  if (!/^<\?xml\b|^<testsuites?\b/i.test(text)) return null;
+  const suites = [...text.matchAll(/<testsuite\b[^>]*>/gi)].map((match) => match[0]);
+  const tags = suites.length ? suites : [/<testsuites\b[^>]*>/i.exec(text)?.[0] ?? ''];
+  if (!tags[0]) return null;
+  const total = tags.reduce((sum, tag) => sum + attribute(tag, 'tests'), 0);
+  const failed = tags.reduce((sum, tag) => sum + attribute(tag, 'failures'), 0);
+  const errors = tags.reduce((sum, tag) => sum + attribute(tag, 'errors'), 0);
+  const skipped = tags.reduce((sum, tag) => sum + attribute(tag, 'skipped'), 0);
+  if (!total && !failed && !errors && !skipped) return null;
+  return { ...base(framework, 'junit_xml', 'high'), passed: Math.max(0, total - failed - errors - skipped), failed, skipped, errors, failingTestsTotal: failed + errors, failingTestsTruncated: failed + errors > 0 };
+}
+
+function parseText(framework: string, stdout: string, stderr: string): ParsedResult | null {
+  const lines = `${stdout}\n${stderr}`.replace(ansi, '').split(/\r?\n/).map((line) => line.trim());
   if (framework === 'vitest') {
-    const passed = number(text, 'passed'); const failed = number(text, 'failed'); const skipped = number(text, 'skipped');
-    if (/Test Files|Tests\s+/i.test(text)) return { resultStatus: status, summary: { framework, passed, failed, skipped, errors: 0, failingTests: [], failingTestsTotal: failed, failingTestsReturned: 0, failingTestsTruncated: failed > 0, parseMethod: 'text_regex', parseConfidence: 'medium' } };
+    const line = lines.find((value) => /^Tests\s+/i.test(value));
+    if (line) {
+      const passed = count(line, 'passed'), failed = count(line, 'failed'), skipped = count(line, 'skipped');
+      return { ...base(framework, 'text_regex', 'medium'), passed, failed, skipped, errors: 0, failingTestsTotal: failed, failingTestsTruncated: failed > 0 };
+    }
   }
   if (framework === 'jest') {
-    const line = /Tests:\s*(?:(\d+) failed,?\s*)?(?:(\d+) skipped,?\s*)?(?:(\d+) passed)/i.exec(text);
-    if (line) { const failed=Number(line[1]??0), skipped=Number(line[2]??0), passed=Number(line[3]??0); return { resultStatus: status, summary: { framework, passed, failed, skipped, errors: 0, failingTests: [], failingTestsTotal: failed, failingTestsReturned: 0, failingTestsTruncated: failed > 0, parseMethod:'text_regex',parseConfidence:'medium' } }; }
+    const line = lines.find((value) => /^Tests:\s*/i.test(value));
+    if (line) {
+      const passed = count(line, 'passed'), failed = count(line, 'failed'), skipped = count(line, 'skipped');
+      return { ...base(framework, 'text_regex', 'medium'), passed, failed, skipped, errors: 0, failingTestsTotal: failed, failingTestsTruncated: failed > 0 };
+    }
   }
   if (framework === 'pytest') {
-    const passed=number(text,'passed'), failed=number(text,'failed'), skipped=number(text,'skipped'), errors=number(text,'errors?');
-    if (/\d+\s+(?:passed|failed|error|skipped)/i.test(text)) return { resultStatus: status, summary: { framework, passed, failed, skipped, errors, failingTests: [], failingTestsTotal: failed + errors, failingTestsReturned: 0, failingTestsTruncated: failed + errors > 0, parseMethod:'text_regex',parseConfidence:'medium' } };
+    const line = [...lines].reverse().find((value) => /\d+\s+(?:passed|failed|errors?|skipped)\b/i.test(value));
+    if (line) {
+      const passed = count(line, 'passed'), failed = count(line, 'failed'), skipped = count(line, 'skipped'), errors = count(line, 'errors?');
+      return { ...base(framework, 'text_regex', 'medium'), passed, failed, skipped, errors, failingTestsTotal: failed + errors, failingTestsTruncated: failed + errors > 0 };
+    }
   }
-  return { resultStatus: status, summary: { framework: framework ?? 'generic', failingTests: [], failingTestsTotal: 0, failingTestsReturned: 0, failingTestsTruncated: false, parseMethod: executionStatus === 'completed' ? 'exit_code_only' : 'unknown', parseConfidence: executionStatus === 'completed' ? 'low' : 'unknown' } };
+  return null;
+}
+
+export function parseResult(framework: string | undefined, stdout: string, stderr: string, exitCode: number | null, executionStatus: ExecutionStatus): { resultStatus: ResultStatus; summary: ParsedResult } {
+  const name = framework ?? 'generic';
+  const resultStatus: ResultStatus = executionStatus !== 'completed' ? 'unknown' : exitCode === 0 ? 'passed' : 'failed';
+  const summary = parseJson(name, stdout, stderr) ?? parseJunit(name, stdout, stderr) ?? parseText(name, stdout, stderr);
+  if (summary) return { resultStatus, summary };
+  return { resultStatus, summary: base(name, executionStatus === 'completed' ? 'exit_code_only' : 'unknown', executionStatus === 'completed' ? 'low' : 'unknown') };
 }

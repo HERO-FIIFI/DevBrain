@@ -20,4 +20,24 @@
     <question>Using devbrain_project_health and devbrain_git_history on the temporary Git test repository described by the test suite, what recent work and working state can be established?</question>
     <answer>The test repository has two clean commits named first and second. A historyPath scoped to one.txt returns only the first commit, while project health can report its current branch, clean counts, missing upstream observation, and last commit metadata. These expected facts are created deterministically in tests/tools/git-history.test.ts rather than fabricated.</answer>
   </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_repo_map and devbrain_run_tests against fixtures/execution/vitest-pass on first contact, can DevBrain state whether the fixture's tests pass?</question>
+    <answer>No. devbrain_repo_map identifies the requested fixture within the npm repository and includes its package configuration in bounded map evidence, but devbrain_run_tests returns status approval_required with an approvalId, the proposedInvocation it intends to run, and an execution-definition approval reason. Nothing is executed and no resultStatus is produced. This is absence of evidence, not a failing suite: approval_required is not an error and not a pass. Only after a human runs the separate devbrain CLI to approve that exact repository identity, capability, invocation, and definition fingerprint can the suite actually run.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_run_build and devbrain_project_health on fixtures/execution/build-fail once the build capability is approved, did DevBrain fail or did the build fail?</question>
+    <answer>The build failed; DevBrain succeeded. The fixture's build script exits 1 after writing "build failed" to stderr, so the tool returns status complete, executionStatus completed, resultStatus failed, and exitCode 1. It must not return status error, which is reserved for DevBrain being unable to perform the capability at all. devbrain_project_health independently reports the repository state the build ran against, so the failure is attributable to a specific tree rather than inferred.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_run_lint and devbrain_project_health, does a passing lint result prove the committed SHA is clean?</question>
+    <answer>Only when provenance.git.dirty is false. The provenance envelope carries sha, branch, dirty, and dirtyFileCount. When dirty is true the passing lint result proves something about that SHA combined with uncommitted working-tree state, not about the commit alone, and devbrain_project_health corroborates the same dirty counts. Phase 2 only reports this fact and does not decide whether dirty evidence is acceptable.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_run_tests and devbrain_run_targeted_tests on fixtures/execution/vitest-fail, how reliable are the reported test counts and which failing tests are named?</question>
+    <answer>The counts are parsed from runner text, not a machine-readable reporter, so the result carries parseMethod text_regex and parseConfidence medium, reporting 1 failed and 1 passed. No failing test is named: failingTests is empty and failingTestsReturned is 0 while failingTestsTotal is 1 and failingTestsTruncated is true. The identity of the failing test is therefore not evidence DevBrain can supply; devbrain_run_targeted_tests must be pointed at a validated repository-contained target to narrow it further.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_inspect_docker and devbrain_run_tests, are this project's expected containers healthy after its checks ran?</question>
+    <answer>Answerable only when the Docker daemon is actually reachable. When Docker is unavailable devbrain_inspect_docker reports that unavailability explicitly rather than returning an empty container list, because no containers observed and cannot observe are different claims. When Docker is available it reports container status, health, published ports, and sanitized mount metadata, never container environment variable values. Container health is independent of devbrain_run_tests: a passing suite is not evidence that any container is healthy, and the two results correlate only through the execution's recorded provenance.</answer>
+  </qa_pair>
 </evals>

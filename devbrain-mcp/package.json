@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Read-only repository intelligence MCP server",
+  "description": "Repository intelligence, trusted engineering execution, durable evidence, and read-only Docker inspection MCP server",
   "main": "dist/index.js",
   "bin": {
     "devbrain-mcp": "dist/index.js",

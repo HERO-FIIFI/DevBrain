@@ -16,10 +16,20 @@ export async function gitProvenance(root: string) {
 }
 
 export async function environmentProvenance(resolved: ResolvedCapability) {
-  let packageManagerVersion: string | undefined;
-  const version = await runProcess({ executable: resolved.invocation.executable, args: ['--version'], cwd: resolved.invocation.cwd, timeoutMs: 10_000, maxStdoutBytes: 4_096, maxStderrBytes: 4_096 });
-  if (version.status === 'completed') packageManagerVersion = version.stdout.trim().slice(0, 100);
-  return { platform: process.platform, arch: process.arch, nodeVersion: process.version, ...(resolved.packageManager ? { packageManager: resolved.packageManager } : {}), ...(packageManagerVersion ? { packageManagerVersion } : {}) };
+  if (!resolved.packageManager) return { platform: process.platform, arch: process.arch, nodeVersion: process.version };
+  const invocation = packageManagerVersionInvocation(resolved);
+  const version = invocation && await runProcess({ ...invocation, cwd: resolved.invocation.cwd, timeoutMs: 10_000, maxStdoutBytes: 4_096, maxStderrBytes: 4_096 });
+  const packageManagerVersion = version?.status === 'completed' ? (version.stdout.trim() || version.stderr.trim()).slice(0, 100) : '';
+  return { platform: process.platform, arch: process.arch, nodeVersion: process.version, packageManager: resolved.packageManager, ...(packageManagerVersion ? { packageManagerVersion } : {}) };
+}
+
+export function packageManagerVersionInvocation(resolved: ResolvedCapability, platform = process.platform): { executable: string; args: string[] } | null {
+  if (!resolved.packageManager) return null;
+  if (platform === 'win32' && ['npm', 'pnpm', 'yarn'].includes(resolved.packageManager)) {
+    const launcher = resolved.invocation.args[0];
+    return launcher ? { executable: resolved.invocation.executable, args: [launcher, '--version'] } : null;
+  }
+  return { executable: resolved.invocation.executable, args: ['--version'] };
 }
 
 export async function persistEvidence(repository: RepositoryIdentity, id: string, metadata: unknown, result: unknown, stdout: string, stderr: string) {
