@@ -40,4 +40,24 @@
     <question>Using devbrain_inspect_docker and devbrain_run_tests, are this project's expected containers healthy after its checks ran?</question>
     <answer>Answerable only when the Docker daemon is actually reachable. When Docker is unavailable devbrain_inspect_docker reports that unavailability explicitly rather than returning an empty container list, because no containers observed and cannot observe are different claims. When Docker is available it reports container status, health, published ports, and sanitized mount metadata, never container environment variable values. Container health is independent of devbrain_run_tests: a passing suite is not evidence that any container is healthy, and the two results correlate only through the execution's recorded provenance.</answer>
   </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_search_symbols and devbrain_find_references, where is validateToken defined in the controlled context fixture and what actually references it?</question>
+    <answer>validateToken has definitions in the TypeScript auth fixture and Python fixture, so an unqualified read is ambiguous rather than silently guessed. Symbol locations use deterministic language heuristics with medium confidence. References are bounded textual matches with low confidence, because textual occurrence does not prove semantic reference identity.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_get_execution_evidence and devbrain_diagnose_log, what useful failure signal can be returned without exposing the full stored log?</question>
+    <answer>The evidence tool returns execution/result state, Git and environment provenance, normalized test counts and parsing confidence, plus log byte sizes and hashes without raw log content. The diagnostic tool extracts a bounded primary error, failing-test clue, chained cause and file/line frames where recognizable, labels heuristic confidence, and retains the Phase 2 evidence as authoritative.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_get_diff and devbrain_search_symbols, what changed in the controlled authentication fixture and which directly named symbols are present?</question>
+    <answer>The structured diff reports complete file statistics before returning a bounded, redacted patch. Symbol search can then locate exact named TypeScript, JavaScript or Python definitions in changed files, but Phase 3 does not infer architecture or claim that every symbol in a changed file was behaviorally affected.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_context_pack and devbrain_read_symbol, what minimum context is selected for investigating validateToken under a one-file budget?</question>
+    <answer>An explicit validateToken symbol seed ranks its definition first, and the one-file budget prevents unrelated candidates from entering the pack. The item records its file/range, untrusted repository provenance and explicit_symbol reason; usage stays within the file, line and byte limits. read_symbol can reproduce the bounded definition or report ambiguity when the file is not specified.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_search_text and devbrain_read_file_slice, how does DevBrain handle secret-like values and prompt-like instructions stored in repository files?</question>
+    <answer>Both tools return repository text only as untrusted_content with file/line provenance. Secret-like values are replaced by [REDACTED] with redaction metadata. Prompt-like prose remains data for the caller to inspect and is never executed or treated as an instruction by DevBrain.</answer>
+  </qa_pair>
 </evals>

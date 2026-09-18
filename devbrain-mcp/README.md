@@ -136,6 +136,77 @@ DevBrain attempts actual JSON reporter output, then actual JUnit XML, then frame
 
 **`devbrain_inspect_docker` is observational, but access to the Docker daemon may itself imply significant host privileges depending on platform and configuration.**
 
+## Phase 3 — Context Intelligence & Governance
+
+Phase 3 adds deterministic, local context retrieval and evidence packaging. DevBrain remains a capability layer: it can locate, bound, measure, redact, and package evidence, but it does not decide what code to change or whether a fix is correct.
+
+- `devbrain_search_text` performs bounded literal repository search with optional file globs.
+- `devbrain_search_symbols` locates TypeScript, JavaScript, and Python definitions with explicit resolution confidence.
+- `devbrain_find_references` returns bounded textual symbol occurrences labelled as low-confidence textual evidence.
+- `devbrain_read_file_slice` returns one canonical, line-numbered file range.
+- `devbrain_read_symbol` returns one definition or an explicit ambiguity/not-found state.
+- `devbrain_get_diff` returns structured working-tree, staged, commit, or range evidence with complete file statistics and a bounded patch.
+- `devbrain_get_execution_evidence` retrieves bounded Phase 2 evidence by `executionId`, never by filesystem path.
+- `devbrain_diagnose_log` extracts bounded errors, failing-test clues, chained causes, and file/line frames from stored execution logs.
+- `devbrain_context_pack` persists and returns a deterministic evidence package under requested and hard budgets.
+
+### Context Security Model
+
+Repository content is untrusted data. Every returned repository item carries `source.type: repository_file` and `source.trust: untrusted_content`; execution-log diagnostics use the same untrusted-content discipline. Text such as “ignore previous instructions” is returned only as quoted repository evidence and is never executed or treated as an instruction by DevBrain.
+
+Phase 3 uses no LLM, embedding model, vector database, remote semantic search, or network service. MCP supplies deterministic capabilities and evidence; Skills and callers retain judgment and sequencing.
+
+### Bounded Retrieval and Context Budgets
+
+Searches respect Git ignore rules when available and exclude `.git`, dependency environments, build output, coverage, caches, binaries, and generated directories. Canonical path checks reject traversal and symlink escape.
+
+Hard ceilings apply even when callers request more:
+
+| Resource | Hard ceiling |
+| --- | ---: |
+| Context-pack files | 20 |
+| Lines | 3,000 |
+| Bytes | 200,000 |
+| Search matches | 200 |
+| References | 200 |
+| Diff patch | 150,000 bytes |
+
+All bounded tools return explicit counts and truncation state. There is no unlimited or recursive whole-repository response mode.
+
+### Symbol and Reference Resolution
+
+Initial TypeScript, JavaScript, and Python symbol discovery uses deterministic language-specific syntax heuristics and reports `resolutionMethod: heuristic`, `confidence: medium`. Reference lookup is textual and reports low confidence; it does not claim semantic identity. Multiple definitions produce an ambiguity result rather than a guessed selection.
+
+### Diagnostic Compression
+
+Execution evidence retrieval returns normalized state, provenance, parser confidence, log sizes, and hashes without full logs. Diagnostic compression examines bounded stored logs for common Vitest, Jest, pytest, compiler, lint, stack-frame, and chained-exception patterns. Its extracted structure is heuristic and confidence-labelled; Phase 2 logs remain authoritative.
+
+### Context Packs
+
+Context packs rank only deterministic signals: explicit seed files/symbols, execution stack frames, working-tree diff files, and exact objective terms. Each included item records a selection reason, file/range, repository-content trust, redaction state, and content hash. Unexplained files are not included.
+
+Every pack receives a `contextPackId` and stores a content-free manifest at:
+
+```text
+~/.devbrain/context-packs/<repository-id>/<context-pack-id>/manifest.json
+```
+
+The manifest records repository SHA/branch/dirty state, budgets, usage, selected ranges and reasons, hashes, exclusions, confidence, and file/line/byte metrics. It does not duplicate repository content. A dirty pack represents the recorded SHA plus working-tree state, not the clean commit alone.
+
+Context metrics report repository, candidate, and included files/lines/bytes plus budget utilization. DevBrain does not claim token savings without model-specific tokenization.
+
+### Secret Redaction and Prompt-Injection Boundary
+
+Search results, slices, symbols, diffs, diagnostics, execution evidence, and context packs reuse shared secret redaction. Returned metadata indicates redaction without exposing detected values. Prompt-like repository prose remains visible only as provenance-labelled untrusted evidence so a caller can assess it without DevBrain obeying it.
+
+### Phase 3 Known Limitations
+
+- Symbol resolution is heuristic rather than AST/type-checker semantic analysis.
+- Reference matches are textual and can include false positives.
+- Diagnostic parsers cover common formats but cannot reconstruct every custom runner output.
+- Context packs deliberately stop at deterministic evidence; they do not summarize, recommend edits, calculate change impact, or perform architecture analysis.
+- Context-pack manifest persistence is DevBrain-owned external state, so that tool is non-idempotent even though it does not mutate the repository.
+
 ## Security Model and Limitations
 
 - Canonical paths must remain under `DEVBRAIN_WORKSPACE_ROOT`; symlink escapes and invalid targeted-test paths are rejected.

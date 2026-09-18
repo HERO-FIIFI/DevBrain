@@ -1,6 +1,7 @@
 const SENSITIVE = [
   /\b(Bearer\s+)[A-Za-z0-9._~+/-]+=*/gi,
-  /\b((?:api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*)[^\s,;]+/gi,
+  /\b((?:api[_-]?key|token|secret|password|passwd|pwd)\s*=\s*)[^\s,;]+/gi,
+  /\b((?:api[_-]?key|token|secret|password|passwd|pwd)\s*:\s*)(?:"[^"]+"|'[^']+'|[A-Za-z0-9._~+/-]{8,})/gi,
   /\b((?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis):\/\/[^:\s/@]+:)[^@\s/]+@/gi,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
   /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{12,}\b/g,

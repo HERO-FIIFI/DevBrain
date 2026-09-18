@@ -7,9 +7,10 @@ export function devbrainHome(): string { return path.resolve(process.env.DEVBRAI
 export const trustRegistryPath = () => path.join(devbrainHome(), 'trust-registry.json');
 export const approvalsDirectory = () => path.join(devbrainHome(), 'approvals');
 export const executionsDirectory = () => path.join(devbrainHome(), 'executions');
+export const contextPacksDirectory = () => path.join(devbrainHome(), 'context-packs');
 
 export async function ensureDevbrainHome(): Promise<void> {
-  await Promise.all([mkdir(approvalsDirectory(), { recursive: true }), mkdir(executionsDirectory(), { recursive: true })]);
+  await Promise.all([mkdir(approvalsDirectory(), { recursive: true }), mkdir(executionsDirectory(), { recursive: true }), mkdir(contextPacksDirectory(), { recursive: true })]);
 }
 
 export async function readJson<T>(file: string, fallback: T): Promise<T> {

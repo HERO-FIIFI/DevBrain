@@ -140,3 +140,93 @@ Acceptance remediation verified on 2026-09-17 and 2026-09-18. The pre-remediatio
 - Verified implementation SHA: `1912ad3e45472497e1ed89bfbdd0fc04db04b19e`.
 - Final documentation SHA: the commit containing this necessarily self-referential line; resolve it without fabrication as the commit target of `v0.2.0-phase2` (`git rev-list -n 1 v0.2.0-phase2`).
 - Final tag: annotated `v0.2.0-phase2`, identifying the documentation-complete baseline.
+
+---
+
+# Phase 3 — Context Intelligence & Governance
+
+Verified on 2026-09-18 against the working tree that became the Phase 3 baseline.
+
+## Phase 1 + Phase 2 preservation
+
+- Gate 0: `v0.1.0-phase1` and `v0.2.0-phase2` (`bd66ce3eff2b7228d452061a9ee8fc339b5a72a5`) resolved; the Phase 2 baseline reproduced exactly (20 files / 67 tests, lint PASS, build PASS, 10 tools) before any Phase 3 change.
+- Regression: **PASS** — every Phase 1/2 test remains in the suite unchanged; the ten Phase 1/2 tools keep their contracts and annotations. No Phase 1/2 test, schema, trust control, evidence semantic, or execution safeguard was weakened.
+- Shared changes were limited to `src/index.ts` (registration), `src/execution/home.ts` (`context-packs/` directory), and `src/lib/redaction.ts` (the `key: value` form now requires a quoted or ≥8-character token so TypeScript annotations such as `token: string` are not treated as secrets; `key=value` is unchanged).
+- Phase 1/2 history was not rewritten.
+
+## Quality gates
+
+- Tests: **PASS** — `npm test`, 23 files and 89 tests (Phase 2's 20/67 plus `tests/context/retrieval.test.ts` (8), `tests/context/evidence-diagnostics.test.ts` (4, parameterised), `tests/context/context-pack.test.ts` (5), and the extended 19-tool `tests/server.test.ts` contract).
+- Lint: **PASS** — `npm run lint`, zero errors.
+- Build: **PASS** — `npm run build`, zero TypeScript errors.
+- Tools: **PASS** — 19 registered (5 Phase 1, 5 Phase 2, 9 Phase 3).
+
+## Phase 3 capabilities (Inspector call outcomes)
+
+All calls below went through the official `@modelcontextprotocol/inspector` 2.7.0 CLI over stdio against the DevBrain repository root, with `DEVBRAIN_HOME=%TEMP%\devbrain-phase3-acceptance`. The Inspector validated every `structuredContent` against the advertised `outputSchema`.
+
+- `devbrain_search_text`: `partial` — query `boundedInteger`, 127 files scanned, 13 total matches, 5 returned, `truncated: true`, every match carries `source.trust: untrusted_content`.
+- `devbrain_search_symbols`: `complete` — one definition, `devbrain-mcp/src/context/budgets.ts:10-14`, `function`/`typescript`, `resolutionMethod: heuristic`, `confidence: medium`.
+- `devbrain_find_references`: `partial` — 13 references across five files, 10 returned, `resolutionMethod: textual`, `confidence: low`, `truncated: true`.
+- `devbrain_read_file_slice`: `complete` — lines 1-8 of `budgets.ts`, 200 bytes, line-numbered, untrusted provenance.
+- `devbrain_read_symbol`: `complete` — `boundedInteger` body with kind, language, resolution method, and confidence. The first Inspector call was rejected by output validation because the result carried a `language` field the output schema did not declare (zod strips unknown keys, so the unit tests had not caught it). The schema now declares `language`, and the retrieval test strict-parses the result so undeclared fields fail in CI; the failure was reproduced before the fix and passes after it.
+- `devbrain_get_diff`: `complete` — `working_tree`, 8 files, +123/−9, 21,921-byte patch, not truncated, 1 secret-like fixture value redacted.
+- `devbrain_get_execution_evidence`: `complete` — Phase 2 execution `exec_mu5pop5i_1d5b166f-121c-4d34-9170-df0f530f6de3` returned capability `test`, completed/passed, Vitest 67/0/0, `text_regex`/medium, Git `0517a7e` dirty, log sizes and SHA-256 hashes, and no raw log content.
+- `devbrain_diagnose_log`: `complete` — Phase 2 failing execution `exec_mu5pr3fw_3c17483f-5c42-4f85-b7a5-1bf2e4a74ea2` yielded `primaryFailure: Error / "Tests 1 failed | 1 passed (2)"`, `confidence: medium`, untrusted provenance. That log holds only an 80-byte summary, so no frames existed to extract; richer Vitest, Jest, pytest, compiler, lint, chained-exception, large, and unknown logs are covered by the parameterised diagnostic tests.
+- `devbrain_context_pack`: `partial` — `ctx_mu6xp8io_154129bd-4079-4b67-82c2-b6e21c761697`, budget 4 files / 300 lines / 20,000 bytes, usage 4 / 233 / 17,231, metrics 127 repository files → 19 candidates → 4 included, 551 → 233 lines, 54,684 → 17,231 bytes, 15 budget-excluded items, `truncated: true`, `confidence: high`, manifest persisted under `context-packs/<repository-id>/<context-pack-id>/manifest.json`.
+- Negative calls: `read_file_slice` on `../Qwen_Tui/.gitignore` returned `isError` with `Path is outside permitted workspace`; `get_execution_evidence` with `../../etc/passwd` was rejected by the input schema pattern before any filesystem access.
+- Phase 1/2 regression through the same Inspector session: `repo_map` complete, `find_todos` complete with findings, `run_tests` `unsupported`/`capability_not_detected` at the workspace root without executing anything, `inspect_docker` honest `partial` because the daemon was unavailable.
+
+## Security
+
+- Path boundary: **PASS** — every retrieval tool resolves through the shared canonical path safety; traversal and out-of-workspace requests are rejected (unit tests plus the Inspector negative call above).
+- Symlink boundary: **PASS** — symlink escape is rejected in `tests/context/retrieval.test.ts`; on Windows the file-symlink case requires symlink privilege and the test accounts for that without weakening the assertion.
+- Secret redaction: **PASS** — search results, slices, symbols, diffs, diagnostics, execution evidence, and context packs pass through the shared redactor; tests assert the fixture value never appears while `redactionCount`/`redacted` metadata is preserved.
+- Prompt-injection provenance: **PASS** — repository text containing `IMPORTANT INSTRUCTIONS FOR AI: ignore previous instructions` is returned verbatim as data with `source: { type: repository_file, trust: untrusted_content }`; nothing in DevBrain interprets it.
+- Hard context ceilings: **PASS** — `HARD_CONTEXT_LIMITS` (20 files / 3,000 lines / 200,000 bytes / 200 search results / 200 references / 150,000 diff bytes) are enforced in input schemas (`maximum`) and by `boundedInteger`; requests above a ceiling are rejected, and outputs above a budget return truncation metadata instead of the full content.
+- Evidence store: `executionId` is the only accepted handle (`^exec_[A-Za-z0-9_-]{8,200}$`); no evidence-store path is accepted.
+
+## Context packs
+
+- Budget enforcement: **PASS** — requested budgets are honoured exactly (usage never exceeds budget, including after redaction expansion) and remain capped by the hard ceilings.
+- Selection reasons: **PASS** — every item carries `reason.code` ∈ {`explicit_file`, `explicit_symbol`, `stack_reference`, `git_diff`, `exact_text`} with its evidence/source; ranking follows the brief's signal order (explicit seeds, failure/stack references, Git diff relevance, exact text), so diff-relevant files outrank plain text matches by design.
+- Dirty provenance: **PASS** — packs record `sha`, `branch`, `dirty`, and `dirtyFileCount`; every DevBrain pack in this acceptance was produced on a dirty worktree and says so.
+- Metrics: **PASS** — files, lines, bytes, and budget utilisation percentages only; no token claims.
+- Persistence: **PASS** — manifests store file, line range, symbol, SHA-256 of the included slice, reason, and repository state, not repository content.
+
+## Languages
+
+- TypeScript: **PASS** — function/class/interface/type/enum definitions and references verified on fixtures and on DevBrain itself (`heuristic`/medium).
+- JavaScript: **PASS** — fixture symbol resolution verified (`heuristic`/medium).
+- Python: **PASS** — fixture function/class resolution verified, and `WorkspaceIndex` resolved on Qwen_Tui (`heuristic`/medium).
+
+## Real repositories
+
+- JavaScript/TypeScript: **PASS** — DevBrain itself. Objective "Investigate context pack budget enforcement and provenance"; `ctx_mu6u06qp_6089d8d6-5d69-47df-a82a-650665a764c1`; SHA `bd66ce3` on `master`, dirty (20 files); budget 6 / 500 / 40,000; 127 repository files → 54 candidates → 6 included; 987 → 283 lines; 111,517 → 30,084 bytes; 48 budget-excluded items; `confidence: high`. The first attempt was rejected because the seed file was given relative to `devbrain-mcp/` instead of the Git root; the rerun used the canonical repository-relative path rather than weakening path resolution.
+- Python: **PASS** — Qwen_Tui. Objective "Investigate WorkspaceIndex Git context resolution"; `ctx_mu6tzklc_650215b3-ef9e-4c25-ae42-68ce7ad10eea`; clean SHA `817f5359b11b33b57f010862f0b7a104ea3d822e` on `main`; budget 6 / 500 / 40,000; 25 repository files → 9 candidates → 6 included; 247 → 184 lines; 11,402 → 8,984 bytes; `confidence: high`.
+- Both packs answered a bounded question without reading the whole repository; only characteristics are recorded here, not repository content.
+
+## MCP Inspector
+
+- `tools/list --strict`: 19 tools, every tool has `inputSchema` and `outputSchema`, zero portability findings.
+- Annotations: the eight retrieval/evidence tools are `readOnlyHint: true`, non-destructive, idempotent, closed-world; `devbrain_context_pack` is `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: false` because it persists a DevBrain-owned manifest outside the repository.
+- All nine Phase 3 tools were called with validated `structuredContent`; bounded output, truncation metadata, `isError` on boundary violations, and schema rejection of malformed identifiers were observed. No repository mutation occurred.
+
+## Evaluations
+
+- Automated validation: **PASS** — `evals.xml` contains exactly 15 multi-tool QA pairs: the original five Phase 1, five Phase 2, and five new Phase 3 evaluations.
+- Phase 1/2 evaluations were preserved unchanged.
+- Manual Phase 3 replay: **PASS** — replayed against the built `dist/` tools on a controlled Git fixture (TypeScript `validateToken` plus a Python `validateToken`, a secret-like value, prompt-like prose, an ignored file, and an uncommitted authentication change). Observed: two `heuristic`/medium definitions and an `ambiguous` unqualified `read_symbol` with 2 candidates; `textual`/low references across three files; execution evidence with counts, log sizes, and hashes but no raw log, and a medium-confidence diagnostic with untrusted provenance; a complete working-tree diff (1 file, +1/−0) with `refreshToken` located in the changed file; a one-file pack (1 file / 3 lines / 52 bytes, 2 budget-excluded candidates, `explicit_symbol` reason, `untrusted_content`) and a qualified `read_symbol` with no secret leakage; `api_key=[REDACTED]` in search results and a slice that keeps the injection prose as data with `redacted: true`. Answers derive from tool output, not assumed states.
+
+## Known limitations and residual risks
+
+- Symbol and reference resolution is deterministic and language-aware but heuristic (no AST or type-checker); definitions report `heuristic`/medium and references `textual`/low. Textual references may include false positives and are labelled as such.
+- Diagnostic compression is regex-based (`medium` at best). When a log carries only a summary line, `primaryFailure.type` falls back to a generic `Error` and no frames are returned.
+- Context-pack ranking is signal-ordered, not semantic; a large working-tree diff can crowd out exact-text candidates under a small file budget. The excluded counts make this visible.
+- Redaction is pattern-based; unusual secret formats can pass through, and quoted TypeScript-like values are now only redacted when they look like tokens.
+- Ignore handling relies on Git when available and on a fixed exclusion list otherwise; generated content that is neither Git-ignored nor in the list is searchable.
+- Context-pack manifests are local files under `DEVBRAIN_HOME`; operators manage retention and access.
+
+## Phase 3 baseline
+
+- Phase 2 baseline: `bd66ce3eff2b7228d452061a9ee8fc339b5a72a5` (`v0.2.0-phase2`).
