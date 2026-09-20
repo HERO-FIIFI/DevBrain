@@ -234,3 +234,75 @@ All calls below went through the official `@modelcontextprotocol/inspector` 2.7.
 - Final documentation SHA: the commit containing this necessarily self-referential line; resolve it without fabrication as the commit target of `v0.3.0-phase3` (`git rev-list -n 1 v0.3.0-phase3`).
 - Final tag: annotated `v0.3.0-phase3`, identifying the documentation-complete baseline.
 - Working tree at verification: clean. The unrelated `site/` landing page was committed separately as `e04825b` before Phase 3 closure.
+
+---
+
+# Phase 4 — Architecture, Dependency & Change Intelligence
+
+Verified on 2026-09-20 against the working tree intended for the Phase 4 baseline.
+
+## Phase 1–3 preservation
+
+- Gate 0: annotated tag `v0.3.0-phase3` resolves to `2bafdbd8fc74053feb5ac803aea9641fdbebd821`, matching the documented and pushed Phase 3 baseline (23 files / 89 tests, lint PASS, build PASS, 19 tools, 15 evaluations).
+- Regression: **PASS** — the complete Phase 1–3 suite remains present and passes. Phase 4 adds seven tools without replacing prior registrations or weakening execution approval, evidence, path-boundary, redaction, or context-budget controls.
+- The Phase 4 acceptance tree is deliberately dirty while evidence is collected; no result below is attributed to clean commit `2bafdbd` alone.
+
+## Quality gates
+
+- Tests: **PASS** — `npm test`, 27 files and 121 tests.
+- Lint: **PASS** — `npm run lint`, zero errors.
+- Build: **PASS** — `npm run build`, zero TypeScript errors.
+- Container reproduction: **PASS** — `node:22-bookworm`, source mounted read-only, writable tmpfs only for `node_modules`, `dist`, and `.test-tmp`; `npm ci` installed 216 packages with zero audit vulnerabilities, then the same 27/121 tests, lint, and build passed.
+- Tools: **PASS** — 26 registered (5 Phase 1, 5 Phase 2, 9 Phase 3, 7 Phase 4).
+
+## Phase 4 capabilities
+
+- `devbrain_dependency_graph`: bounded repository/workspace/file/symbol graph with deterministic nodes and edges, source-line evidence, explicit resolution methods and confidence, hard ceilings of depth 5 / 500 nodes / 1,500 edges, totals, and truncation metadata.
+- `devbrain_architecture_map`: packages, entry points, routes, persistence, tests, external dependencies, relationships, and explicitly inferred layering; observed and inferred claims remain distinguishable.
+- `devbrain_api_inventory` and `devbrain_route_inventory`: bounded supported-framework declarations with method/path, handler, middleware, source location, resolution state, classification, confidence, and downstream structural evidence.
+- `devbrain_database_schema`: repository-declared Prisma, TypeORM, Sequelize, SQLAlchemy, Django ORM, and SQL DDL evidence only; datasource configuration is redacted and live database state is never claimed.
+- `devbrain_migration_status`: repository migration chains, ordering, operations, duplicates, missing parents, branches, gaps, and cycles; database state is always `not_observed`.
+- `devbrain_change_impact`: file, symbol, and working-tree/staged/commit/range diff seeds; bounded reverse traversal; direct, transitive, interface, persistence, test, and configuration categories; every result is `potential` and carries a relationship path and evidence.
+- `devbrain_context_pack`: optional `architectureRelevance` adds at most ten deterministic impact candidates while preserving the Phase 3 file/line/byte ceilings and signal ordering.
+
+## MCP Inspector
+
+- Official `@modelcontextprotocol/inspector` CLI `tools/list --strict`: **PASS** — 26 tools, all with input and output schemas; all seven Phase 4 tools have read-only, non-destructive, idempotent, closed-world annotations.
+- All seven Phase 4 tools were invoked over stdio and their `structuredContent` validated against advertised schemas. Observed outcomes were: dependency graph `partial` at an explicit 10-node bound; architecture map `partial`; API inventory `complete`; route inventory `complete`; database schema `unsupported` with no schema claimed; migration status `complete` with unknown chain state; change impact `complete`, resolving `src/index.ts` to `tests/server.test.ts` as a potential test impact.
+- Hard limits are advertised in schemas: graph depth 5 / nodes 500 / edges 1,500, inventory results 500, impact depth 5 / results 500.
+- Boundary negative: dependency graph with `path=../..` returned `isError` and the Inspector exited nonzero; no outside-workspace analysis occurred.
+- Every Phase 4 response states `evidence: static_repository_analysis` and `runtime: not_observed`.
+
+## Real repositories
+
+- JavaScript/TypeScript: **PASS** — DevBrain at SHA `2bafdbd8fc74053feb5ac803aea9641fdbebd821` on `master`, dirty with 19 paths during acceptance. The bounded graph returned 120 nodes / 270 edges and honestly truncated; architecture returned 56 components / 52 relationships; API and route inventories returned four declarations each. No supported database schema was found and migration state was unknown, so neither was fabricated. A file impact from `devbrain-mcp/src/index.ts` found the test relationship to `devbrain-mcp/tests/server.test.ts`; the working-tree diff seed returned 7 direct, 26 transitive, and 9 test candidates before its 50-result/depth-2 bound truncated the report.
+- Python: **PASS** — Qwen_Tui at clean SHA `817f5359b11b33b57f010862f0b7a104ea3d822e` on `main`. The bounded graph returned 120 nodes / 157 edges and honestly truncated; architecture returned 8 components / 15 relationships. No supported web framework, schema, or migration chain was claimed. Impact from `qwen_tui/app.py` found one high-confidence direct importer (`qwen_tui/__main__.py`) and two medium-confidence test relationships (`tests/test_core.py`, `tests/test_ui.py`).
+- Context Pack integration: DevBrain selected the explicit `src/index.ts` seed plus higher-ranked dirty-diff evidence under a 6-file / 500-line / 30,000-byte budget. Qwen_Tui selected the explicit `app.py` seed, its direct importer, and both related tests with `direct_impact` / `test_relationship` reasons before exact-text candidates. Both packs retained high confidence, provenance, redaction, and hard budget enforcement.
+- The first sandboxed Qwen_Tui provenance attempt was blocked by Git dubious-ownership protection; the approved acceptance rerun read the repository as its owning user and recorded its real SHA and clean state. No repository content or Git state was changed.
+
+## Evaluations
+
+- Automated validation: **PASS** — `evals.xml` contains exactly 20 multi-tool QA pairs: the original five per earlier phase plus exactly five Phase 4 pairs.
+- Manual Phase 4 replay: **PASS** — all five new questions were replayed against built tools, controlled fixtures, and the two real repositories: graph plus architecture distinguished static imports from inferred grouping; routes plus impact kept reachability and breakage unclaimed; absent schema/migrations returned unsupported/unknown rather than clean; working-tree diff plus impact produced evidence-bearing bounded candidates; impact-informed Context Packs prioritized direct/test evidence without exceeding Phase 3 budgets.
+- Answers are evidence summaries, not release or safety judgments.
+
+## Security and determinism
+
+- Canonical path and symlink boundaries remain shared with Phase 3; traversal is rejected before repository scanning.
+- Secret redaction covers datasource URLs and configuration evidence; tests confirm providers may be identified while credentials are not returned.
+- Graph ordering, ambiguous same-name symbol handling, migration duplicate/missing-parent/cycle findings, impact cycle handling, rename/delete diff handling, and cap/truncation semantics have deterministic tests.
+- Large repositories are bounded by both repository-model and per-tool ceilings. Partial output reports totals/truncation rather than silently appearing complete.
+
+## Known limitations and residual risks
+
+- Analysis is static and heuristic. Import resolution and convention-based test, layer, route, schema, and configuration relationships can produce false positives or miss dynamic behavior; classifications and confidence expose that boundary.
+- Framework names can be detected from repository metadata or analyzed fixture content even when no production route is runtime-reachable. Inventory is declaration evidence, not deployment evidence.
+- Dynamic imports, metaprogramming, generated code, dependency-injection runtime wiring, raw SQL assembled at runtime, and database drift are not fully observable.
+- Repository-scope graph limits can truncate even small source trees when symbol and external-dependency nodes are numerous; callers should narrow scope for detail.
+- Context-pack impact ranking is deterministic rather than semantic, and a large dirty diff can consume a small budget before lower-ranked architecture candidates.
+
+## Phase 4 baseline
+
+- Phase 3 baseline: `2bafdbd8fc74053feb5ac803aea9641fdbebd821` (`v0.3.0-phase3`).
+- Final documentation SHA: the commit containing this necessarily self-referential line; resolve it without fabrication as the commit target of `v0.4.0-phase4` (`git rev-list -n 1 v0.4.0-phase4`).
+- Final tag: annotated `v0.4.0-phase4`, identifying the documentation-complete baseline after the final clean-tree gates pass.

@@ -207,6 +207,83 @@ Search results, slices, symbols, diffs, diagnostics, execution evidence, and con
 - Context packs deliberately stop at deterministic evidence; they do not summarize, recommend edits, calculate change impact, or perform architecture analysis.
 - Context-pack manifest persistence is DevBrain-owned external state, so that tool is non-idempotent even though it does not mutate the repository.
 
+## Phase 4 — Architecture, Dependency & Change Intelligence
+
+Phase 4 adds seven deterministic, read-only capabilities:
+
+- `devbrain_dependency_graph` returns bounded file, symbol, package, module, and external-dependency relationships.
+- `devbrain_architecture_map` groups evidence-backed applications, packages, entry points, API, service, persistence, test, module, and external-dependency components.
+- `devbrain_api_inventory` inventories declared HTTP APIs and public package exports.
+- `devbrain_route_inventory` maps declared routes to handlers, middleware, and statically imported downstream files.
+- `devbrain_database_schema` normalizes repository-defined ORM schema and SQL DDL evidence.
+- `devbrain_migration_status` checks repository migration ordering and parseable schema operations.
+- `devbrain_change_impact` ranks bounded potential impacts from file, symbol, or Git diff seeds.
+
+All seven inspect repository evidence only. They do not execute application code, connect to databases, apply migrations, refactor code, approve releases, or call an LLM.
+
+### Relationship Model
+
+Every relationship records a source ID, target ID, bounded relationship type, source file/line evidence, classification, resolution method, and confidence. The vocabulary includes imports, exports, references, inheritance, routes, services, tables, tests, packages, modules, and migration operations. New arbitrary relationship strings are not generated.
+
+Graphs are capped at 500 nodes, 1,500 edges, depth 5, and 300 analysed source files. Smaller caller limits are honoured; larger requests are rejected. Responses report returned and known counts, reached depth, and truncation. Iterative visited-node traversal terminates cycles.
+
+### Observed vs Inferred vs Potential
+
+- `observed` means a deterministic repository construct was parsed, such as an import, manifest dependency, route declaration, schema declaration, or migration identifier.
+- `inferred` means deterministic evidence supports a relationship that is not literally declared, such as a directory-based layer, mounted route prefix, cross-package module relationship, or test import.
+- `potential` is reserved for change-impact candidates. It never means a target will fail or change at runtime.
+
+### Confidence Semantics
+
+`high` is used for direct, unambiguous parsed evidence; `medium` for deterministic heuristics or composed evidence; `low` for textual or naming-convention evidence; and `unknown` when no supported conclusion is available. Confidence never upgrades static evidence into runtime proof.
+
+### Dependency Graph
+
+`devbrain_dependency_graph` accepts repository, workspace/package, file, or symbol scope. TypeScript/JavaScript and Python imports resolve to repository files or declared/undeclared external packages where possible. File-qualified symbol IDs prevent same-named definitions in different packages from merging; ambiguous textual references are attached only when an import resolves to the matching definition.
+
+### Architecture Map
+
+`devbrain_architecture_map` groups files using manifest entry points, route/schema/table evidence, imports, test naming, and bounded path conventions. Observable route or schema evidence remains observed; service/layer classification from paths is inferred. If no supported layer evidence exists, layering is `undetermined` rather than invented.
+
+### API/Route Inventory
+
+Framework adapters cover Express, Next.js, FastAPI, Flask, and Django when dependency evidence identifies that framework. Static routes include method, path, handler, middleware, framework, evidence, and resolution state. Dynamic/unresolvable construction is returned as partial low-confidence evidence without fabricating the final runtime route. Route downstream entries are static handler-file imports, not runtime call traces.
+
+### Repository Schema Intelligence
+
+`devbrain_database_schema` recognizes Prisma, TypeORM, Sequelize, SQLAlchemy, Django ORM, and parseable SQL DDL. It distinguishes declared schema, migration-derived schema, and inferred model mapping, and returns normalized tables, columns, indexes, foreign keys, source locations, classification, and confidence. Datasource configuration is redacted and may report a provider; credentials are never returned.
+
+### Migration Intelligence
+
+`devbrain_migration_status` recognizes Prisma, Alembic, Django, numbered SQL, Knex, TypeORM, and Sequelize-style repository chains where deterministic evidence exists. It reports order, latest identifier, duplicates, obvious gaps, missing dependencies, multiple heads, cycles, and parseable create/alter/drop operations. “Repository migration chain appears consistent” does not mean any database has applied it.
+
+### Change Impact
+
+`devbrain_change_impact` accepts file, symbol, and Git diff seeds. It resolves changed files/symbols, follows bounded reverse imports, correlates routes, repository schema/table references, tests, and observable configuration, then ranks direct, interface, persistence, test, transitive, and configuration candidates. Every candidate is `potential` and explains why through a relationship path and evidence.
+
+### Diff-Seeded Impact
+
+Diff seeds reuse the Phase 3 Git argument builder for working-tree, staged, commit, and range modes. Responses preserve SHA, branch, dirty state, changed paths, and hunk-intersecting symbols. Deleted paths remain Git evidence even when content no longer exists; rename paths follow Git’s selected diff mode.
+
+### Phase 3 Integration
+
+`devbrain_context_pack` accepts optional `architectureRelevance: true`. It adds at most ten deterministic impact candidates, ranked between Git-diff and exact-text signals. Phase 3’s file, line, and byte budgets, redaction, content hashes, selection reasons, manifests, and `untrusted_content` provenance remain unchanged; discovering a large graph cannot grow a pack.
+
+### Static-vs-Runtime Limitations
+
+A declared route is not proof it is reachable. A repository schema is not production database state. A static reference is not proof of runtime execution. A test import is not behavioral coverage. Phase 4 exposes these boundaries as `boundary: { evidence: "static_repository_analysis", runtime: "not_observed" }` and uses partial/unsupported results where deterministic evidence ends.
+
+### Monorepo Semantics
+
+Repositories, packages/workspaces, modules, files, and symbols remain distinct nodes. Package identity is preserved on nodes and component IDs; cross-package imports produce explicit package relationships instead of flattening all definitions into one namespace.
+
+### Phase 4 Known Limitations
+
+- Parsing is deterministic and bounded but heuristic; it is not a compiler, type checker, framework runtime, or SQL engine.
+- Dynamic imports, metaprogrammed routes, generated ORM models, and custom migration frameworks may be partial or unsupported.
+- Impact candidates are ranked static possibilities, not predicted failures.
+- The in-process graph cache is keyed by repository SHA and dirty worktree state; no persistent architecture index or daemon is created.
+
 ## Security Model and Limitations
 
 - Canonical paths must remain under `DEVBRAIN_WORKSPACE_ROOT`; symlink escapes and invalid targeted-test paths are rejected.

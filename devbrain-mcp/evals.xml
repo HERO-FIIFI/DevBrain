@@ -60,4 +60,24 @@
     <question>Using devbrain_search_text and devbrain_read_file_slice, how does DevBrain handle secret-like values and prompt-like instructions stored in repository files?</question>
     <answer>Both tools return repository text only as untrusted_content with file/line provenance. Secret-like values are replaced by [REDACTED] with redaction metadata. Prompt-like prose remains data for the caller to inspect and is never executed or treated as an instruction by DevBrain.</answer>
   </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_dependency_graph and devbrain_architecture_map, what depends directly and transitively on a service, and which conclusions are observed rather than inferred?</question>
+    <answer>The dependency graph follows bounded import edges from file- or symbol-qualified seeds and reports direct and transitive nodes with source-line evidence, resolution method, confidence, depth, and truncation counts. The architecture map groups observable packages, entry points, routes, persistence files, tests, and dependencies; directory- or layer-based groupings are explicitly inferred. Static imports are not runtime calls, and an inferred service layer is not presented as an observed domain fact.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_route_inventory and devbrain_change_impact, which routes could be affected if an authentication service changes?</question>
+    <answer>The route inventory supplies declared HTTP method/path, handler, middleware, framework, source location, resolution state, and confidence. Change impact reverse-traverses bounded structural relationships from the service and emits related routes as potential interface impacts with an explicit relationshipPath and evidence. A high-confidence static path is still potential impact, not proof the route is reachable at runtime or will break.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_database_schema and devbrain_migration_status, what repository-defined database structures and migration state are related to a feature?</question>
+    <answer>The schema tool normalizes repository-declared ORM/DDL tables, columns, indexes, foreign keys, origins, and redacted datasource metadata. Migration status reports repository migration frameworks, ordering, latest identifiers, parseable operations, duplicates, gaps, missing dependencies, branches, or cycles. Both are static repository evidence: they do not connect to a database and cannot claim the production schema is current.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_get_diff and devbrain_change_impact, what could the current Git working-tree changes affect and what evidence supports each candidate?</question>
+    <answer>get_diff establishes exact changed paths, additions/deletions, bounded redacted patch content, and dirty Git provenance. Change impact reuses the same Git modes, resolves changed symbols where their ranges intersect diff hunks, then ranks bounded direct, transitive, interface, persistence, test, and configuration candidates. Every candidate is classified potential and includes a relationship path and evidence; an empty list means no supported static relationship was found, not that the change is safe.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_change_impact and devbrain_context_pack, can change-impact evidence build a smaller relevant Context Pack without violating Phase 3 budgets?</question>
+    <answer>When architectureRelevance is enabled, the Context Pack may add at most ten deterministic impact candidates and ranks direct, interface, test, persistence, and transitive evidence ahead of plain exact-text relevance while preserving explicit seeds, stack evidence, and Git-diff priority. The existing file, line, and byte budgets remain authoritative; impact discovery cannot grow the pack, and every selected range retains its reason, hash, redaction state, and untrusted repository provenance.</answer>
+  </qa_pair>
 </evals>

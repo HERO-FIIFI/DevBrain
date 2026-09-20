@@ -21,6 +21,13 @@ import {getDiff,getDiffInput,getDiffOutput} from './tools/get-diff.js';
 import {getExecutionEvidence,getExecutionEvidenceInput,getExecutionEvidenceOutput} from './tools/get-execution-evidence.js';
 import {diagnoseLog,diagnoseLogInput,diagnoseLogOutput} from './tools/diagnose-log.js';
 import {contextPack,contextPackInput,contextPackOutput,contextPackAnnotations} from './tools/context-pack.js';
+import {dependencyGraph,dependencyGraphInput,dependencyGraphOutput} from './tools/dependency-graph.js';
+import {architectureMap,architectureMapInput,architectureMapOutput} from './tools/architecture-map.js';
+import {apiInventory,apiInventoryInput,apiInventoryOutput} from './tools/api-inventory.js';
+import {routeInventory,routeInventoryInput,routeInventoryOutput} from './tools/route-inventory.js';
+import {databaseSchema,databaseSchemaInput,databaseSchemaOutput} from './tools/database-schema.js';
+import {migrationStatus,migrationStatusInput,migrationStatusOutput} from './tools/migration-status.js';
+import {changeImpact,changeImpactInput,changeImpactOutput} from './tools/change-impact.js';
 import { redact } from './lib/redaction.js';
 import { summary } from './tools/common.js';
 import { fileURLToPath } from 'node:url';
@@ -53,6 +60,13 @@ export function createServer(): McpServer {
   server.registerTool('devbrain_get_execution_evidence',{description:'Retrieve bounded Phase 2 execution evidence by execution ID.',inputSchema:getExecutionEvidenceInput,outputSchema:getExecutionEvidenceOutput,annotations:readOnly},async(input)=>response(await getExecutionEvidence(input)));
   server.registerTool('devbrain_diagnose_log',{description:'Extract bounded diagnostic signal from stored execution logs by execution ID.',inputSchema:diagnoseLogInput,outputSchema:diagnoseLogOutput,annotations:readOnly},async(input)=>response(await diagnoseLog(input)));
   server.registerTool('devbrain_context_pack',{description:'Persist and return a deterministic budgeted context manifest with explicit selection reasons.',inputSchema:contextPackInput,outputSchema:contextPackOutput,annotations:contextPackAnnotations},async(input)=>response(await contextPack(input)));
+  server.registerTool('devbrain_dependency_graph',{description:'Build a bounded structural dependency graph from imports, exports, manifests, and class relationships with per-edge evidence and confidence.',inputSchema:dependencyGraphInput,outputSchema:dependencyGraphOutput,annotations:readOnly},async(input)=>response(await dependencyGraph(input)));
+  server.registerTool('devbrain_architecture_map',{description:'Return a bounded, evidence-backed component map with inferred layering, never an LLM summary.',inputSchema:architectureMapInput,outputSchema:architectureMapOutput,annotations:readOnly},async(input)=>response(await architectureMap(input)));
+  server.registerTool('devbrain_api_inventory',{description:'Inventory statically observable HTTP APIs and public package exports without executing application code.',inputSchema:apiInventoryInput,outputSchema:apiInventoryOutput,annotations:readOnly},async(input)=>response(await apiInventory(input)));
+  server.registerTool('devbrain_route_inventory',{description:'Map framework routes to handlers, middleware, and downstream imports with explicit confidence for dynamic routes.',inputSchema:routeInventoryInput,outputSchema:routeInventoryOutput,annotations:readOnly},async(input)=>response(await routeInventory(input)));
+  server.registerTool('devbrain_database_schema',{description:'Normalize repository-declared, migration-derived, and model-inferred database schema evidence without connecting to a database.',inputSchema:databaseSchemaInput,outputSchema:databaseSchemaOutput,annotations:readOnly},async(input)=>response(await databaseSchema(input)));
+  server.registerTool('devbrain_migration_status',{description:'Analyze repository migration chains for ordering, duplicates, gaps, and operations without applying anything.',inputSchema:migrationStatusInput,outputSchema:migrationStatusOutput,annotations:readOnly},async(input)=>response(await migrationStatus(input)));
+  server.registerTool('devbrain_change_impact',{description:'Return bounded, evidence-backed potential impact candidates for a symbol, file, or Git diff seed.',inputSchema:changeImpactInput,outputSchema:changeImpactOutput,annotations:readOnly},async(input)=>response(await changeImpact(input)));
   return server;
 }
 
