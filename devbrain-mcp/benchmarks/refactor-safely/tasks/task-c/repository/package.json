@@ -1,0 +1,16 @@
+{
+  "name": "member-directory",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Member directory with an SQL-declared schema, an in-memory database, a repository, a service, and a JSON API",
+  "scripts": {
+    "test": "node --test",
+    "test:targeted": "node --test tests/visible/member-repository.test.js",
+    "lint": "node scripts/lint.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
