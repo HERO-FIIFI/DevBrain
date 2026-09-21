@@ -51,7 +51,13 @@ export function auditIsolation({ rawEvents, stderr = '', canary, layout }) {
 }
 
 function killTree(child) {
-  if (process.platform === 'win32') { spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { shell: false, windowsHide: true, stdio: 'ignore' }).on('error', () => child.kill('SIGKILL')); return; }
+  if (process.platform === 'win32') {
+    const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { shell: false, windowsHide: true, stdio: 'ignore' });
+    const fallback = setTimeout(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); }, 1_000);
+    killer.on('error', () => { clearTimeout(fallback); child.kill('SIGKILL'); });
+    killer.on('close', (code) => { if (code === 0) clearTimeout(fallback); else { clearTimeout(fallback); child.kill('SIGKILL'); } });
+    return;
+  }
   try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
 }
 
