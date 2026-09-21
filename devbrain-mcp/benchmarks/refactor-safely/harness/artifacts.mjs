@@ -36,6 +36,29 @@ export class ArtifactStore {
     return { name, path: file, bytes: bytes.length, sha256: hash };
   }
 
+  /** Exclusive streaming sink for process output; `finalize()` flushes, hashes, writes the sidecar, and seals it. */
+  async openRawSink(name) {
+    const file = this.rawPath(name);
+    let handle;
+    try { handle = await open(file, 'wx'); } catch (error) { if (error.code === 'EEXIST') throw new Error(`ARTIFACT_ALREADY_EXISTS: ${name}`, { cause: error }); throw error; }
+    const stream = handle.createWriteStream({ flush: true });
+    let bytes = 0;
+    const write = (chunk) => new Promise((resolve, reject) => { const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), 'utf8'); bytes += buffer.length; stream.write(buffer, (error) => (error ? reject(error) : resolve())); });
+    let finalized = null;
+    const finalize = async () => {
+      if (finalized) return finalized;
+      finalized = (async () => {
+        await new Promise((resolve, reject) => stream.end((error) => (error ? reject(error) : resolve())));
+        const hash = sha256(await readFile(file));
+        await writeExclusive(`${file}.sha256`, Buffer.from(`${hash}\n`, 'utf8'));
+        await chmod(file, 0o444).catch(() => {});
+        return { name, path: file, bytes, sha256: hash };
+      })();
+      return finalized;
+    };
+    return { name, path: file, write, finalize, get bytes() { return bytes; } };
+  }
+
   /** Recomputes the hash of the raw bytes and compares it with the sidecar written at creation. */
   async verify(name) {
     const file = this.rawPath(name);

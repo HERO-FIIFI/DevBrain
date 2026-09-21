@@ -84,6 +84,12 @@ export function deriveRunMetrics(parsed, context, parserVersion = PARSER_VERSION
   };
 }
 
+/** CONTROL must carry no DevBrain MCP call and no read of a skill-path file; any such event invalidates the run. */
+export function auditControlIsolation(parsed, context) {
+  const { treatmentLeak } = deriveRunMetrics(parsed, { ...context, condition: 'control', prompt: '', skillFiles: [] });
+  return treatmentLeak.detected ? { status: 'CONTROL_TREATMENT_LEAK', events: treatmentLeak.events } : { status: 'clean', events: [] };
+}
+
 const tokenMeasurement = (value) => (value === null ? unknownMeasurement('tokens', 'usage field absent from turn.completed') : reported(value, 'tokens'));
 const other = (ledger, event, output) => ledger.add({ domain: 'agent_visible', category: 'other_tool_output', metadataBytes: bytes(output), eventId: event.eventId, confidence: 'exact', origin: 'shell' });
 
