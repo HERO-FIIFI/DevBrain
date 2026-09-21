@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "refactor-safely-pilot-summary@1",
+  "status": "BLOCKED",
+  "recommendation": "REMEDIATE",
+  "branch": "experiment/refactor-safely-pilot",
+  "readinessCommit": "48c123a5dfcb2d3eb4e3fa363b29c64e363ce7f5",
+  "baselineCommit": "d2f92462a650123304d3d7c0f1c8c5acc6e4a249",
+  "requestedModel": "gpt-5.6-sol",
+  "resolvedModel": null,
+  "pilotRuns": [],
+  "skillForwardTests": {
+    "status": "NOT_RUN",
+    "reason": "The exact-model preflight blocked first; no live session was permitted afterward."
+  },
+  "preflight": {
+    "status": "BLOCKED",
+    "checkedAt": "2026-09-21T02:14:12.559Z",
+    "reason": "CLI surface lacks planned flags: --ask-for-approval",
+    "cliVersion": "codex-cli 0.149.0-alpha.4.3",
+    "rawEvidence": "model-preflight.json",
+    "rawEvidenceSha256": "98eacb2b2baeeae97a1848f656e8920a179ed07b7a95fefecabc7de62d81886a"
+  },
+  "catalog": {
+    "source": "model-catalog-evidence.json",
+    "requestedModelListed": true,
+    "availableIdentifiers": [
+      "gpt-reserve",
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+      "gpt-5.5",
+      "codex-auto-review"
+    ]
+  },
+  "blockingFindings": [
+    {
+      "id": "CLI_APPROVAL_FLAG_DRIFT",
+      "evidence": "codex exec --help does not expose --ask-for-approval; the flag is available only on the top-level interactive CLI.",
+      "impact": "The frozen measured invocation cannot launch on this installed CLI."
+    },
+    {
+      "id": "ISOLATED_CONFIG_NOT_LOADED",
+      "evidence": "codex exec --help states that --ignore-user-config does not load $CODEX_HOME/config.toml, while the harness places the explicit DevBrain MCP entry in that file.",
+      "impact": "Removing only the unsupported flag would not establish that the DEVBrain condition receives its intended MCP treatment."
+    },
+    {
+      "id": "RESOLVED_MODEL_UNKNOWN",
+      "evidence": "The catalog lists gpt-5.6-sol, but no isolated session completed and emitted trustworthy resolved-model metadata.",
+      "impact": "The exact requested/resolved model invariant is unproven and cannot be treated as a pass."
+    }
+  ],
+  "isolationAudit": {
+    "taskRepositoriesCreated": false,
+    "controlAgentLaunched": false,
+    "devbrainAgentLaunched": false,
+    "taskBOrCLaunched": false,
+    "additionalRepetitionsLaunched": false
+  },
+  "nextAction": "Review and approve a test-backed CLI compatibility remediation that preserves private configuration, strict CONTROL isolation, identical condition settings, approval_policy=never, and trustworthy exact resolved-model evidence; then issue a new execution approval."
+}
