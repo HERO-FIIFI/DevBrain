@@ -123,17 +123,24 @@ describe('pilot stop control', () => {
 });
 
 describe('model preflight', () => {
+  const compatible = async () => ({ status: 'ready', cliVersion: '0.149.0-alpha.4.3', common: { model: PINNED_MODEL, approvalPolicy: 'Never', sandbox: 'WorkspaceWrite', network: 'restricted' }, delta: { mcpServers: ['devbrain'], skills: ['refactor-safely'] } });
   it('blocks when the CLI surface lacks a planned flag and never launches a probe', async () => {
     const launched: any[] = [];
-    const result = await preflightModel({ cliHelp: async () => 'Usage: codex exec\n  --model <MODEL>\n', discover: async () => ({ adapters: [], catalog: { status: 'ok', models: [PINNED_MODEL], aliases: {}, sources: ['fake'] } }), probe: async () => { launched.push(1); return { events: '', stderr: '' }; } });
+    const result = await preflightModel({ cliHelp: async () => 'Usage: codex exec\n  --model <MODEL>\n', inspectConditions: compatible, discover: async () => ({ adapters: [], catalog: { status: 'ok', models: [PINNED_MODEL], aliases: {}, sources: ['fake'] } }), probe: async () => { launched.push(1); return { events: '', stderr: '' }; } });
     expect(result).toMatchObject({ status: 'BLOCKED', cliSurface: { status: 'BLOCKED', missing: expect.arrayContaining(['--json', '--ephemeral']) } });
     expect(launched).toHaveLength(0);
   });
   it('is ready only with catalog, CLI surface, and trustworthy resolved-model evidence from a probe', async () => {
-    const help = 'Usage\n  --model <MODEL>\n  --json\n  --ephemeral\n  --ignore-user-config\n  --sandbox <MODE>\n  --ask-for-approval <POLICY>\n';
+    const help = 'Usage\n  --model <MODEL>\n  --json\n  --ephemeral\n  --strict-config\n  --sandbox <MODE>\n  --ignore-rules\n';
     const discover = async () => ({ adapters: [], catalog: { status: 'ok', models: [PINNED_MODEL], aliases: {}, sources: ['fake'] } });
-    expect(await preflightModel({ cliHelp: async () => help, discover, probe: async () => ({ events: `${JSON.stringify({ type: 'thread.started', thread_id: 't', model: PINNED_MODEL })}\n`, stderr: '' }) })).toMatchObject({ status: 'ready', resolved: PINNED_MODEL, evidence: { source: 'event' } });
-    expect(await preflightModel({ cliHelp: async () => help, discover, probe: async () => ({ events: '{"type":"turn.started"}\n', stderr: '' }) })).toMatchObject({ status: 'BLOCKED', reason: expect.stringContaining('no resolved model evidence') });
-    expect(await preflightModel({ cliHelp: async () => help, discover: async () => ({ adapters: [], catalog: { status: 'failed', error: 'codex missing', sources: [] } }), probe: async () => ({ events: '', stderr: '' }) })).toMatchObject({ status: 'BLOCKED', reason: expect.stringContaining('discovery failed') });
+    expect(await preflightModel({ cliHelp: async () => help, inspectConditions: compatible, discover, probe: async () => ({ events: `${JSON.stringify({ type: 'thread.started', thread_id: 't', model: PINNED_MODEL })}\n`, stderr: '' }) })).toMatchObject({ status: 'ready', resolved: PINNED_MODEL, evidence: { source: 'event' }, compatibility: { status: 'ready' } });
+    expect(await preflightModel({ cliHelp: async () => help, inspectConditions: compatible, discover, probe: async () => ({ events: '{"type":"turn.started"}\n', stderr: '' }) })).toMatchObject({ status: 'BLOCKED', reason: expect.stringContaining('no resolved model evidence') });
+    expect(await preflightModel({ cliHelp: async () => help, inspectConditions: compatible, discover: async () => ({ adapters: [], catalog: { status: 'failed', error: 'codex missing', sources: [] } }), probe: async () => ({ events: '', stderr: '' }) })).toMatchObject({ status: 'BLOCKED', reason: expect.stringContaining('discovery failed') });
+  });
+  it('blocks on condition isolation drift before catalog discovery or a live probe', async () => {
+    const launched: string[] = [], help = ' --model --json --ephemeral --strict-config --sandbox --ignore-rules ';
+    const result = await preflightModel({ cliHelp: async () => help, inspectConditions: async () => ({ status: 'BLOCKED', reason: 'UNAPPROVED_MCP_SERVER' }), discover: async () => { launched.push('catalog'); return { adapters: [], catalog: { status: 'ok', models: [PINNED_MODEL], aliases: {} } }; }, probe: async () => { launched.push('probe'); return { events: '', stderr: '' }; } });
+    expect(result).toMatchObject({ status: 'BLOCKED', reason: expect.stringContaining('UNAPPROVED_MCP_SERVER') });
+    expect(launched).toEqual([]);
   });
 });

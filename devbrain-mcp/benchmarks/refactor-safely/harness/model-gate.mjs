@@ -29,7 +29,7 @@ export function assertPinnedModel({ requested, resolved, catalog, evidence, cliR
 
 const MODEL_ID = /^[a-z0-9][a-z0-9.-]*$/i;
 
-function catalogFromJson(text) {
+export function catalogFromJson(text) {
   const parsed = JSON.parse(text), models = new Set(), aliases = {};
   const visit = (node) => {
     if (Array.isArray(node)) { node.forEach(visit); return; }
@@ -46,7 +46,7 @@ export function defaultAdapters({ executable = 'codex', codexHome = process.env.
   const cli = async (args) => { const result = await runCommand({ executable, args }, process.cwd(), { timeoutMs: 30_000 }); if (result.exitCode !== 0) throw new Error(`${executable} ${args.join(' ')} exited ${result.exitCode}: ${(result.stderr || result.stdout).trim().slice(0, 300)}`); return result.stdout; };
   return [
     { name: 'cli_version', run: async () => ({ status: 'ok', raw: (await cli(['--version'])).trim(), models: [], aliases: {} }) },
-    { name: 'debug_models', run: async () => { const raw = await cli(['debug', 'models']); const models = raw.split(/\r?\n/).map((line) => line.trim()).filter((line) => MODEL_ID.test(line)); return { status: 'ok', raw, models, aliases: {} }; } },
+    { name: 'debug_models', run: async () => { const raw = await cli(['debug', 'models']); return { status: 'ok', raw, ...catalogFromJson(raw) }; } },
     { name: 'models_cache', run: async () => { const raw = await readFile(path.join(codexHome, 'models_cache.json'), 'utf8'); return { status: 'ok', raw, ...catalogFromJson(raw) }; } },
   ];
 }

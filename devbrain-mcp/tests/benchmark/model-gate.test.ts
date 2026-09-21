@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PINNED_MODEL } from '../../benchmarks/refactor-safely/harness/conditions.mjs';
-import { assertPinnedModel, discoverModels, resolveModelEvidence, verifyCliSurface } from '../../benchmarks/refactor-safely/harness/model-gate.mjs';
+import { assertPinnedModel, catalogFromJson, discoverModels, resolveModelEvidence, verifyCliSurface } from '../../benchmarks/refactor-safely/harness/model-gate.mjs';
 import { parseJsonl } from '../../benchmarks/refactor-safely/harness/events.mjs';
 
 describe('pinned model gate', () => {
@@ -23,6 +23,9 @@ describe('pinned model gate', () => {
 });
 
 describe('model discovery adapters', () => {
+  it('parses the installed debug-models JSON catalog shape', () => {
+    expect(catalogFromJson('{"models":[{"slug":"gpt-5.6-sol","displayName":"GPT 5.6 Sol"}]}')).toEqual({ models: ['gpt-5.6-sol'], aliases: {} });
+  });
   it('records every adapter attempt and never fabricates a catalog', async () => {
     const adapters = [
       { name: 'cli_version', run: async () => ({ status: 'ok', raw: 'codex-cli 0.99.0', models: [], aliases: {} }) },

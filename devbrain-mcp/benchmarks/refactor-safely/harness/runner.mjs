@@ -1,7 +1,7 @@
 // Orchestrates one benchmark condition through an explicit state machine and guards the two-run pilot matrix.
 // A condition never schedules another condition and a failed condition is never retried.
 import { Buffer } from 'node:buffer';
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -9,6 +9,7 @@ import { URL, fileURLToPath } from 'node:url';
 import { DEVBRAIN_SERVER_ENTRY, prepareDevBrainApprovals } from './approvals.mjs';
 import { ArtifactStore } from './artifacts.mjs';
 import { CODEX_EXEC_FLAGS, PINNED_MODEL, assertConditionParity, controlInvocation, devbrainInvocation, renderCodexHome } from './conditions.mjs';
+import { auditCliCapabilities, inspectCliCondition } from './cli-compatibility.mjs';
 import { PARSER_VERSION, auditControlIsolation, deriveRunMetrics } from './derive.mjs';
 import { parseJsonl } from './events.mjs';
 import { loadTask, materializeTask, runCommand, snapshotRepository } from './fixtures.mjs';
@@ -38,20 +39,39 @@ function normalizeForParity(invocation, runRoot) { const text = JSON.stringify(i
 // ---- model preflight ----------------------------------------------------------------------------------------------
 
 /** CLI surface, catalog discovery, then one trivial ephemeral probe whose events/stderr must resolve the pinned model. */
-export async function preflightModel({ executable = 'codex', cliHelp, discover = discoverModels, probe } = {}) {
+export async function preflightModel({ executable = 'codex', cliHelp, inspectConditions = inspectConditionCompatibility, discover = discoverModels, probe } = {}) {
   const help = cliHelp ?? (async () => { const result = await runCommand({ executable, args: ['exec', '--help'] }, process.cwd(), { timeoutMs: 30_000 }); if (result.exitCode !== 0) throw new Error(`CLI_HELP_FAILED: ${(result.stderr || result.stdout).trim().slice(0, 200)}`); return result.stdout; });
   const record = { requested: PINNED_MODEL, harnessVersion: HARNESS_VERSION, checkedAt: new Date().toISOString() };
   let helpText;
   try { helpText = await help(); } catch (error) { return { ...record, status: 'BLOCKED', reason: `CLI unavailable: ${error.message}`, cliSurface: null, catalog: null, resolved: null, evidence: null }; }
   const cliSurface = verifyCliSurface(helpText, CODEX_EXEC_FLAGS);
   if (cliSurface.status !== 'ok') return { ...record, status: 'BLOCKED', reason: `CLI surface lacks planned flags: ${cliSurface.missing.join(', ')}`, cliSurface, catalog: null, resolved: null, evidence: null };
+  const compatibility = await inspectConditions({ executable });
+  if (compatibility.status !== 'ready') return { ...record, status: 'BLOCKED', reason: `CLI condition isolation failed: ${compatibility.reason}`, cliSurface, compatibility, catalog: null, resolved: null, evidence: null };
   const discovery = await discover({ executable });
   const catalogGate = assertPinnedModel({ requested: PINNED_MODEL, resolved: PINNED_MODEL, catalog: discovery.catalog });
-  if (catalogGate.status !== 'ready') return { ...record, status: 'BLOCKED', reason: catalogGate.reason, cliSurface, catalog: discovery.catalog, adapters: discovery.adapters, resolved: null, evidence: null };
+  if (catalogGate.status !== 'ready') return { ...record, status: 'BLOCKED', reason: catalogGate.reason, cliSurface, compatibility, catalog: discovery.catalog, adapters: discovery.adapters, resolved: null, evidence: null };
   const probed = await (probe ?? defaultProbe)({ executable });
   const evidence = resolveModelEvidence({ parsed: parseJsonl(probed.events), stderr: probed.stderr });
   const gate = assertPinnedModel({ requested: PINNED_MODEL, resolved: evidence.resolved, evidence: evidence.evidence, conflicts: evidence.conflicts, catalog: discovery.catalog });
-  return { ...record, status: gate.status, reason: gate.reason ?? null, cliSurface, catalog: discovery.catalog, adapters: discovery.adapters, resolved: evidence.resolved, evidence: evidence.evidence, probe: { eventBytes: Buffer.byteLength(probed.events), stderrBytes: Buffer.byteLength(probed.stderr) } };
+  return { ...record, status: gate.status, reason: gate.reason ?? null, cliSurface, compatibility, catalog: discovery.catalog, adapters: discovery.adapters, resolved: evidence.resolved, evidence: evidence.evidence, probe: { eventBytes: Buffer.byteLength(probed.events), stderrBytes: Buffer.byteLength(probed.stderr) } };
+}
+
+export async function inspectConditionCompatibility({ executable = 'codex' } = {}) {
+  const root = path.join(os.tmpdir(), `devbrain-cli-compat-${Date.now()}`), cwd = path.join(root, 'repository');
+  try {
+    await mkdir(cwd, { recursive: true });
+    const make = (condition) => ({ visiblePrompt: 'task', repositoryRoot: cwd, codexHome: path.join(root, condition, 'codex-home'), environment: process.env, devbrain: { serverEntry: posix(DEVBRAIN_SERVER_ENTRY), home: posix(path.join(root, 'devbrain', 'home')), workspaceRoot: posix(root), skillSource: posix(SKILL_SOURCE), skillFiles: [] } });
+    const control = controlInvocation(make('control')), devbrain = devbrainInvocation(make('devbrain'));
+    for (const invocation of [control, devbrain]) {
+      await mkdir(invocation.codexHome, { recursive: true });
+      for (const [file, content] of Object.entries(renderCodexHome(invocation))) { const target = path.join(invocation.codexHome, file); if (typeof content === 'string') { await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, content); } else await copySkill(content.copyFrom, target); }
+    }
+    const [controlEvidence, devbrainEvidence] = await Promise.all([control, devbrain].map((invocation) => inspectCliCondition({ executable, cwd, codexHome: invocation.codexHome, environment: invocation.env })));
+    const audit = auditCliCapabilities(controlEvidence.capabilities, devbrainEvidence.capabilities);
+    return { ...audit, conditions: { control: controlEvidence.capabilities, devbrain: devbrainEvidence.capabilities } };
+  } catch (error) { return { status: 'BLOCKED', reason: error.message }; }
+  finally { await rm(root, { recursive: true, force: true }).catch(() => {}); }
 }
 
 async function defaultProbe({ executable }) {
