@@ -32,6 +32,12 @@ npm run benchmark:refactor-safely:pilot -- --approval <approval.json> --runs-roo
 
 Preflight must prove that both the requested and resolved identifiers are exactly `gpt-5.6-sol`; it never falls back. A missing, aliased, or conflicting identifier produces `BLOCKED` before either measured run.
 
+### Codex CLI compatibility
+
+Compatibility is capability-based, not version-allowlisted. The harness accepts Codex CLI releases whose `exec` surface provides the required model, JSONL, ephemeral-session, and sandbox controls and whose diagnostics can prove the isolated config, exact `never` approval policy, restricted network, CONTROL treatment absence, and DEVBrain-only treatment. Known legacy, current, and forward-shaped diagnostic records are normalized before parity checks.
+
+A CLI version that cannot prove any invariant is reported as `BLOCKED`. The harness does not replace missing controls with weaker flags or infer the actual session model from configuration, catalog membership, or command success.
+
 To derive a report from completed immutable records:
 
 ```powershell

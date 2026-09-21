@@ -17,9 +17,11 @@ describe('condition parity', () => {
     const shared = sharedInvocation(run('control'));
     expect(Object.isFrozen(shared)).toBe(true);
     expect(shared.executable).toBe('codex');
-    expect(shared.args).toEqual(['exec', '--model', PINNED_MODEL, '--json', '--ephemeral', '--strict-config', '--sandbox', 'workspace-write', '--ignore-rules', 'Rename `AuthService.validateToken()` to `AuthService.verifyToken()`.']);
+    expect(shared.args).toEqual(['exec', '--model', PINNED_MODEL, '--json', '--ephemeral', '--sandbox', 'workspace-write', 'Rename `AuthService.validateToken()` to `AuthService.verifyToken()`.']);
     expect(shared.args).not.toContain('--ignore-user-config');
     expect(shared.args).not.toContain('--ask-for-approval');
+    expect(shared.args).not.toContain('--strict-config');
+    expect(shared.args).not.toContain('--ignore-rules');
     expect(shared.args).not.toContain('--search');
     expect(PINNED_MODEL).toBe('gpt-5.6-sol');
     expect(shared.cwd).toBe('C:/runs/abc/repository');

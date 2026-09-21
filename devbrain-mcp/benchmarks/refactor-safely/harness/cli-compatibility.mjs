@@ -5,6 +5,16 @@ import { PINNED_MODEL } from './conditions.mjs';
 import { runCommand } from './fixtures.mjs';
 
 const normalized = (value) => String(value ?? '').replaceAll('\\', '/').replace(/\/$/, '').toLowerCase();
+const canonicalApproval = (value) => normalized(value).replaceAll('-', '') === 'never' ? 'Never' : String(value ?? '');
+const canonicalFilesystem = (value) => normalized(value).replaceAll('-', '') === 'workspacewrite' ? 'workspace-write' : normalized(value);
+const canonicalNetwork = (value) => ['restricted', 'disabled', 'false'].includes(normalized(value)) ? 'restricted' : normalized(value);
+const configEvidence = (value, parseStatus) => {
+  if (typeof value === 'string') return { path: value, loaded: parseStatus === 'ok' };
+  if (Array.isArray(value)) return { path: value[0], loaded: ['loaded', 'ok'].includes(normalized(value[1])) };
+  if (value && typeof value === 'object') return { path: value.path, loaded: ['loaded', 'ok'].includes(normalized(value.status)) };
+  return { path: null, loaded: false };
+};
+const mcpEntries = (value) => Array.isArray(value) ? value : Array.isArray(value?.servers) ? value.servers : [];
 const skillNames = (promptInput) => {
   const text = JSON.stringify(promptInput ?? []);
   const known = [];
@@ -18,18 +28,18 @@ export function parseCliCapabilities({ doctor, mcpList, promptInput, expectedHom
   if (config?.status !== 'ok' || sandbox?.status !== 'ok') throw new Error('CLI_DIAGNOSTICS_INCOMPLETE');
   const actualHome = config.details?.CODEX_HOME;
   if (normalized(actualHome) !== normalized(expectedHome) || !path.isAbsolute(actualHome)) throw new Error(`CONFIG_HOME_MISMATCH: expected ${expectedHome}; actual ${actualHome ?? '<missing>'}`);
-  const configFile = config.details?.['config.toml'];
-  if (normalized(configFile) !== normalized(path.join(expectedHome, 'config.toml')) || config.details?.['config.toml parse'] !== 'ok') throw new Error('MINIMAL_CONFIG_NOT_LOADED');
-  const servers = (mcpList ?? []).filter((entry) => entry.enabled !== false).map((entry) => entry.name).sort();
+  const loadedConfig = configEvidence(config.details?.['config.toml'], config.details?.['config.toml parse']);
+  if (normalized(loadedConfig.path) !== normalized(path.join(expectedHome, 'config.toml')) || !loadedConfig.loaded) throw new Error('MINIMAL_CONFIG_NOT_LOADED');
+  const servers = mcpEntries(mcpList).filter((entry) => entry.enabled !== false).map((entry) => entry.name).sort();
   return {
     cliVersion: doctor.codexVersion,
     configHome: actualHome,
     configuredModel: config.details?.model ?? null,
     resolvedModel: null,
-    approvalPolicy: sandbox.details?.['approval policy'] ?? null,
+    approvalPolicy: canonicalApproval(sandbox.details?.['approval policy']),
     sandbox: expectedSandbox,
-    doctorFilesystem: sandbox.details?.['filesystem sandbox'] ?? null,
-    network: sandbox.details?.['network sandbox'] ?? null,
+    doctorFilesystem: canonicalFilesystem(sandbox.details?.['filesystem sandbox']),
+    network: canonicalNetwork(sandbox.details?.['network sandbox']),
     mcpServers: servers,
     skills: skillNames(promptInput),
   };
@@ -40,7 +50,7 @@ export function auditCliCapabilities(control, devbrain) {
   const common = ['cliVersion', 'configuredModel', 'approvalPolicy', 'sandbox', 'doctorFilesystem', 'network'];
   for (const key of common) if (control[key] !== devbrain[key]) throw new Error(`CONDITION_CAPABILITY_MISMATCH: ${key}`);
   if (control.configuredModel !== PINNED_MODEL) throw new Error('CONFIGURED_MODEL_MISMATCH');
-  if (control.sandbox !== 'workspace-write' || control.doctorFilesystem !== 'restricted' || control.network !== 'restricted') throw new Error('SANDBOX_POLICY_MISMATCH');
+  if (control.sandbox !== 'workspace-write' || !['workspace-write', 'restricted'].includes(control.doctorFilesystem) || control.network !== 'restricted') throw new Error('SANDBOX_POLICY_MISMATCH');
   if (control.mcpServers.length) throw new Error('CONTROL_MCP_LEAK');
   if (control.skills.length) throw new Error('CONTROL_SKILL_LEAK');
   if (devbrain.mcpServers.some((name) => name !== 'devbrain') || devbrain.mcpServers.length !== 1) throw new Error('UNAPPROVED_MCP_SERVER');

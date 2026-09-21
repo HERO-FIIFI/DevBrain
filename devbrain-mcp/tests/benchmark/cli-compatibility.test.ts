@@ -18,7 +18,7 @@ const treatmentDoctor = {
   },
 };
 
-describe('Codex CLI 0.149 compatibility audit', () => {
+describe('version-agnostic Codex CLI compatibility audit', () => {
   it('accepts a minimal CONTROL and a DevBrain-only treatment configuration', () => {
     const control = parseCliCapabilities({ doctor: controlDoctor, mcpList: [], promptInput: [{ role: 'user', content: 'task' }], expectedHome: 'C:/runs/control/codex-home' });
     const devbrain = parseCliCapabilities({ doctor: treatmentDoctor, mcpList: [{ name: 'devbrain', enabled: true }], promptInput: [{ role: 'developer', content: 'refactor-safely' }, { role: 'user', content: 'task' }], expectedHome: 'C:/runs/devbrain/codex-home' });
@@ -44,6 +44,25 @@ describe('Codex CLI 0.149 compatibility audit', () => {
   it('keeps configured model evidence distinct from actual-session resolution', () => {
     const control = parseCliCapabilities({ doctor: controlDoctor, mcpList: [], promptInput: [], expectedHome: 'C:/runs/control/codex-home' });
     expect(control).toMatchObject({ configuredModel: 'gpt-5.6-sol', resolvedModel: null });
+  });
+
+  it('accepts legacy and current config diagnostic schemas without a version allowlist', () => {
+    const legacy = structuredClone(controlDoctor);
+    legacy.codexVersion = '0.90.0';
+    legacy.checks['config.load'].details['config.toml'] = ['C:/runs/control/codex-home/config.toml', 'loaded'];
+    delete legacy.checks['config.load'].details['config.toml parse'];
+    legacy.checks['sandbox.helpers'].details['approval policy'] = 'never';
+    legacy.checks['sandbox.helpers'].details['filesystem sandbox'] = 'WorkspaceWrite';
+    const parsedLegacy = parseCliCapabilities({ doctor: legacy, mcpList: { servers: [] }, promptInput: [], expectedHome: 'C:/runs/control/codex-home' });
+    expect(parsedLegacy).toMatchObject({ cliVersion: '0.90.0', approvalPolicy: 'Never', sandbox: 'workspace-write', doctorFilesystem: 'workspace-write', mcpServers: [] });
+
+    const future = structuredClone(controlDoctor);
+    future.codexVersion = '1.7.2';
+    future.checks['config.load'].details['config.toml'] = { path: 'C:/runs/control/codex-home/config.toml', status: 'loaded' };
+    delete future.checks['config.load'].details['config.toml parse'];
+    future.checks['sandbox.helpers'].details['network sandbox'] = 'disabled';
+    const parsedFuture = parseCliCapabilities({ doctor: future, mcpList: { servers: [] }, promptInput: [], expectedHome: 'C:/runs/control/codex-home' });
+    expect(parsedFuture).toMatchObject({ cliVersion: '1.7.2', doctorFilesystem: 'restricted', network: 'restricted', mcpServers: [] });
   });
 
   it('collects doctor, MCP, and prompt-input evidence under the condition home', async () => {

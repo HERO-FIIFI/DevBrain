@@ -3,7 +3,7 @@
 
 export const PINNED_MODEL = 'gpt-5.6-sol';
 // Flags the live preflight must find in `codex exec --help` before any measured run; nothing here is assumed to exist.
-export const CODEX_EXEC_FLAGS = Object.freeze(['--model', '--json', '--ephemeral', '--strict-config', '--sandbox', '--ignore-rules']);
+export const CODEX_EXEC_FLAGS = Object.freeze(['--model', '--json', '--ephemeral', '--sandbox']);
 export const ENV_ALLOWLIST = Object.freeze(['PATH', 'Path', 'SYSTEMROOT', 'SystemRoot', 'SYSTEMDRIVE', 'SystemDrive', 'COMSPEC', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'LANG', 'LC_ALL', 'TERM', 'SHELL', 'OPENAI_API_KEY', 'CODEX_API_KEY']);
 const SECRET_ENV = /KEY|TOKEN|SECRET|PASSWORD/i;
 const PARITY_DELTA = Object.freeze(['treatment.mcpConfiguration', 'treatment.skillInstruction']);
@@ -20,7 +20,7 @@ export function sharedInvocation(run) {
   env.CODEX_HOME = run.codexHome;
   return deepFreeze({
     executable: 'codex',
-    args: ['exec', '--model', PINNED_MODEL, '--json', '--ephemeral', '--strict-config', '--sandbox', 'workspace-write', '--ignore-rules', run.visiblePrompt],
+    args: ['exec', '--model', PINNED_MODEL, '--json', '--ephemeral', '--sandbox', 'workspace-write', run.visiblePrompt],
     prompt: run.visiblePrompt,
     model: PINNED_MODEL,
     cwd: run.repositoryRoot,

@@ -74,4 +74,8 @@ describe('CLI surface verification', () => {
     expect(verifyCliSurface(help, ['--model', '--json', '--ephemeral', '--ignore-user-config', '--sandbox', '--ask-for-approval'])).toEqual({ status: 'ok', missing: [] });
     expect(verifyCliSurface(help.replace('      --ignore-user-config\n', ''), ['--model', '--ignore-user-config'])).toEqual({ status: 'BLOCKED', missing: ['--ignore-user-config'] });
   });
+  it('requires only the stable invariant-bearing exec surface', () => {
+    const help = 'Usage: codex exec [OPTIONS] [PROMPT]\n  -m, --model <MODEL>\n      --json\n      --ephemeral\n  -s, --sandbox <MODE>\n';
+    expect(verifyCliSurface(help, ['--model', '--json', '--ephemeral', '--sandbox'])).toEqual({ status: 'ok', missing: [] });
+  });
 });
