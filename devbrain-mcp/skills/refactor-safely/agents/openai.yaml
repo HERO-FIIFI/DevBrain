@@ -1,0 +1,6 @@
+interface:
+  display_name: "Refactor Safely"
+  short_description: "Evidence-governed refactoring with DevBrain: resolve, map impact, bounded context, verify targeted to full."
+  default_prompt: "Use the refactor-safely workflow for this refactoring request."
+policy:
+  allow_implicit_invocation: true

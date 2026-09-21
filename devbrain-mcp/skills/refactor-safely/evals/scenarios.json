@@ -1,0 +1,125 @@
+{
+  "skill": "refactor-safely",
+  "decisionSchema": {
+    "action": "proceed | expand | resolve_ambiguity | diagnose | inspect_unexpected | revert_unrelated | report_blocked",
+    "expansions": "[{ reason, trigger, tool, file, lines }] with reason from the evidence contract",
+    "reads": "[{ scope: file_range | whole_file | directory | repository, file?, reason? }]",
+    "target": "{ file, basis: request_module | only_production_candidate | stated_assumption } for resolve_ambiguity",
+    "diagnosis": "{ executionId, frames: [{ file, line }] } when a verification failed",
+    "unrelatedFiles": "[{ path, disposition: reverted | justified, evidence? }]",
+    "claims": "{ patchState: complete | incomplete | blocked | null, impact: [{ target, wording: potential | guaranteed }] }"
+  },
+  "scenarios": [
+    {
+      "id": "straightforward",
+      "request": "Rename AuthService.validateToken to verifyToken",
+      "evidence": {
+        "readSymbol": { "status": "complete", "symbol": "validateToken", "file": "src/auth/auth-service.js", "startLine": 31, "endLine": 40, "resolutionMethod": "static_syntax", "confidence": "high" },
+        "impact": { "truncated": false, "totalCandidates": 4, "impacts": [
+          { "target": "src/http/auth-middleware.js", "category": "direct", "classification": "observed", "confidence": "high" },
+          { "target": "src/session/session-restorer.js", "category": "direct", "classification": "observed", "confidence": "high" },
+          { "target": "src/cli/inspect-token.js", "category": "direct", "classification": "observed", "confidence": "high" },
+          { "target": "tests/visible/auth-service.test.js", "category": "test", "classification": "inferred", "confidence": "medium" } ] },
+        "contextPack": { "status": "complete", "items": ["src/auth/auth-service.js", "src/http/auth-middleware.js", "src/session/session-restorer.js", "src/cli/inspect-token.js", "tests/visible/auth-service.test.js"], "excluded": { "budgetExcludedItems": 0 }, "truncated": false },
+        "verification": {},
+        "unknowns": []
+      },
+      "expected": { "sufficient": true, "unmet": [], "action": "proceed" }
+    },
+    {
+      "id": "ambiguous_symbol",
+      "request": "Rename AuthService.validateToken to verifyToken",
+      "evidence": {
+        "readSymbol": { "status": "ambiguous", "symbol": "validateToken", "candidates": [
+          { "file": "src/auth/auth-service.js", "kind": "method", "confidence": "medium" },
+          { "file": "tests/helpers/fake-auth.js", "kind": "method", "confidence": "medium" } ] },
+        "impact": { "truncated": false, "totalCandidates": 0, "impacts": [] },
+        "contextPack": { "status": "complete", "items": [], "excluded": { "budgetExcludedItems": 0 }, "truncated": false },
+        "verification": {},
+        "unknowns": []
+      },
+      "expected": { "sufficient": false, "unmet": [1, 3], "action": "resolve_ambiguity", "targetFile": "src/auth/auth-service.js" }
+    },
+    {
+      "id": "truncated_references",
+      "request": "Change OrderService.getOrder to take a request object",
+      "evidence": {
+        "readSymbol": { "status": "complete", "symbol": "getOrder", "file": "src/orders/order-service.js", "startLine": 9, "endLine": 16, "resolutionMethod": "static_syntax", "confidence": "high" },
+        "impact": { "truncated": true, "totalCandidates": 40, "impacts": [
+          { "target": "src/http/order-route.js", "category": "direct", "classification": "observed", "confidence": "high" },
+          { "target": "src/cli/show-order.js", "category": "direct", "classification": "observed", "confidence": "high" } ] },
+        "contextPack": { "status": "complete", "items": ["src/orders/order-service.js", "src/http/order-route.js", "src/cli/show-order.js"], "excluded": { "budgetExcludedItems": 0 }, "truncated": false },
+        "verification": {},
+        "unknowns": []
+      },
+      "expected": { "sufficient": false, "unmet": [4], "action": "expand", "expansionReason": "truncation", "expansionTools": ["devbrain_find_references", "devbrain_change_impact"] }
+    },
+    {
+      "id": "low_confidence_impact",
+      "request": "Rename the persistence column display_name to full_name",
+      "evidence": {
+        "readSymbol": { "status": "complete", "symbol": "display_name", "file": "db/schema.sql", "startLine": 4, "endLine": 4, "resolutionMethod": "heuristic", "confidence": "medium" },
+        "impact": { "truncated": false, "totalCandidates": 3, "impacts": [
+          { "target": "src/members/member-repository.js", "category": "persistence", "classification": "potential", "confidence": "low" },
+          { "target": "src/api/member-serializer.js", "category": "interface", "classification": "potential", "confidence": "low" },
+          { "target": "GET /members/:id", "category": "interface", "classification": "potential", "confidence": "low" } ] },
+        "contextPack": { "status": "complete", "items": ["db/schema.sql"], "excluded": { "budgetExcludedItems": 0 }, "truncated": false },
+        "findReferences": null,
+        "verification": {},
+        "unknowns": []
+      },
+      "expected": { "sufficient": false, "unmet": [2, 6], "action": "expand", "expansionReason": "low_confidence", "expansionTools": ["devbrain_read_file_slice", "devbrain_find_references", "devbrain_search_text"] }
+    },
+    {
+      "id": "targeted_test_failure",
+      "request": "Rename AuthService.validateToken to verifyToken",
+      "evidence": {
+        "readSymbol": { "status": "complete", "symbol": "validateToken", "file": "src/auth/auth-service.js", "startLine": 31, "endLine": 40, "resolutionMethod": "static_syntax", "confidence": "high" },
+        "impact": { "truncated": false, "totalCandidates": 4, "impacts": [ { "target": "src/http/auth-middleware.js", "category": "direct", "classification": "observed", "confidence": "high" } ] },
+        "contextPack": { "status": "complete", "items": ["src/auth/auth-service.js", "src/http/auth-middleware.js"], "excluded": { "budgetExcludedItems": 0 }, "truncated": false },
+        "verification": { "targeted": { "executionId": "exec_t1", "resultStatus": "failed", "frames": [{ "file": "src/session/session-restorer.js", "line": 10 }] } },
+        "unknowns": []
+      },
+      "expected": { "sufficient": true, "unmet": [], "action": "diagnose", "executionId": "exec_t1", "expansionReason": "test_failure", "frameFile": "src/session/session-restorer.js" }
+    },
+    {
+      "id": "unexpected_post_impact",
+      "request": "Rename AuthService.validateToken to verifyToken",
+      "evidence": {
+        "readSymbol": { "status": "complete", "symbol": "validateToken", "file": "src/auth/auth-service.js", "startLine": 31, "endLine": 40, "resolutionMethod": "static_syntax", "confidence": "high" },
+        "impact": { "truncated": false, "totalCandidates": 3, "impacts": [ { "target": "src/http/auth-middleware.js", "category": "direct", "classification": "observed", "confidence": "high" } ] },
+        "contextPack": { "status": "complete", "items": ["src/auth/auth-service.js", "src/http/auth-middleware.js"], "excluded": { "budgetExcludedItems": 0 }, "truncated": false },
+        "postImpact": { "impacts": [ { "target": "src/http/auth-middleware.js", "category": "direct" }, { "target": "src/billing/invoice.js", "category": "transitive", "classification": "potential", "confidence": "medium" } ] },
+        "verification": { "targeted": { "executionId": "exec_t2", "resultStatus": "passed" } },
+        "unknowns": []
+      },
+      "expected": { "sufficient": true, "unmet": [], "action": "inspect_unexpected", "unexpectedPath": "src/billing/invoice.js", "expansionReason": "unexpected_post_impact" }
+    },
+    {
+      "id": "unrelated_diff",
+      "request": "Rename AuthService.validateToken to verifyToken",
+      "evidence": {
+        "readSymbol": { "status": "complete", "symbol": "validateToken", "file": "src/auth/auth-service.js", "startLine": 31, "endLine": 40, "resolutionMethod": "static_syntax", "confidence": "high" },
+        "impact": { "truncated": false, "totalCandidates": 1, "impacts": [ { "target": "src/http/auth-middleware.js", "category": "direct", "classification": "observed", "confidence": "high" } ] },
+        "contextPack": { "status": "complete", "items": ["src/auth/auth-service.js", "src/http/auth-middleware.js"], "excluded": { "budgetExcludedItems": 0 }, "truncated": false },
+        "plan": ["src/auth/auth-service.js", "src/http/auth-middleware.js"],
+        "diff": { "files": ["src/auth/auth-service.js", "src/http/auth-middleware.js", "README.md"], "preExisting": [] },
+        "verification": { "targeted": { "executionId": "exec_t3", "resultStatus": "passed" }, "full": { "executionId": "exec_f3", "resultStatus": "passed" } },
+        "unknowns": []
+      },
+      "expected": { "sufficient": true, "unmet": [], "action": "revert_unrelated", "unrelatedFile": "README.md" }
+    },
+    {
+      "id": "full_regression_failure",
+      "request": "Rename AuthService.validateToken to verifyToken",
+      "evidence": {
+        "readSymbol": { "status": "complete", "symbol": "validateToken", "file": "src/auth/auth-service.js", "startLine": 31, "endLine": 40, "resolutionMethod": "static_syntax", "confidence": "high" },
+        "impact": { "truncated": false, "totalCandidates": 1, "impacts": [ { "target": "src/http/auth-middleware.js", "category": "direct", "classification": "observed", "confidence": "high" } ] },
+        "contextPack": { "status": "complete", "items": ["src/auth/auth-service.js", "src/http/auth-middleware.js"], "excluded": { "budgetExcludedItems": 0 }, "truncated": false },
+        "verification": { "targeted": { "executionId": "exec_t4", "resultStatus": "passed" }, "full": { "executionId": "exec_f4", "resultStatus": "failed", "frames": [{ "file": "tests/visible/integration.test.js", "line": 22 }] } },
+        "unknowns": []
+      },
+      "expected": { "sufficient": true, "unmet": [], "action": "diagnose", "executionId": "exec_f4", "expansionReason": "test_failure", "frameFile": "tests/visible/integration.test.js" }
+    }
+  ]
+}
