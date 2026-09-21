@@ -13,7 +13,12 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "benchmark:refactor-safely:test": "vitest run tests/benchmark",
+    "benchmark:refactor-safely:validate": "node benchmarks/refactor-safely/cli.mjs validate",
+    "benchmark:refactor-safely:preflight": "node benchmarks/refactor-safely/cli.mjs preflight-model",
+    "benchmark:refactor-safely:pilot": "node benchmarks/refactor-safely/cli.mjs pilot",
+    "benchmark:refactor-safely:report": "node benchmarks/refactor-safely/cli.mjs report"
   },
   "engines": {
     "node": ">=20"
