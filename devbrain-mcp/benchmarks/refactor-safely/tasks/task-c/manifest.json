@@ -20,6 +20,7 @@
     "src/api/member-serializer.js",
     "tests/visible/member-repository.test.js"
   ],
+  "maxChangedLines": 80,
   "scopedIdentifiers": {
     "old": "display_name",
     "new": "full_name",

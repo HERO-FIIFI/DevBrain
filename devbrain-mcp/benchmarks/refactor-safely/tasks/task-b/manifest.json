@@ -20,6 +20,7 @@
     "tests/doubles/fake-order-service.js",
     "tests/visible/order-service.test.js"
   ],
+  "maxChangedLines": 100,
   "scopedIdentifiers": {
     "old": "getOrder",
     "new": "getOrder",

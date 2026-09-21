@@ -18,6 +18,7 @@
     "src/cli/inspect-token.js",
     "tests/visible/auth-service.test.js"
   ],
+  "maxChangedLines": 60,
   "scopedIdentifiers": {
     "old": "validateToken",
     "new": "verifyToken",
