@@ -113,7 +113,7 @@ function renderConfig(invocation) {
 
 export function renderCodexHome(invocation) {
   const files = {};
-  const { mcpConfiguration, skillInstruction } = invocation.treatment;
+  const { skillInstruction } = invocation.treatment;
   files['config.toml'] = invocation.renderedConfig ?? renderConfig(invocation);
   if (skillInstruction) {
     files[`skills/${skillInstruction.name}`] = { copyFrom: skillInstruction.source };
