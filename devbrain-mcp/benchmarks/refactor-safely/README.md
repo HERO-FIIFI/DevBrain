@@ -6,6 +6,8 @@ This directory contains the frozen CONTROL-versus-DEVBrain benchmark harness. It
 
 Pilot execution is **not authorized**. The `preflight-model`, `run`, and `pilot` commands require an explicit JSON approval file containing both `"statement": "PILOT_EXECUTION_APPROVED"` and a non-empty `"approvedBy"`. Do not create that record without a separate user approval after the readiness review.
 
+Tasks 1–8 passed the offline gate; see [`reports/readiness.md`](reports/readiness.md). Its decision is `READY_FOR_EXECUTION_APPROVAL`, not authorization to execute Task 9.
+
 Tasks B and C are fixture/evaluator preparations only. The executable matrix is fixed to one Task A CONTROL run followed by one Task A DEVBrain run. The harness rejects other tasks, repetitions, or matrices.
 
 ## Offline validation
