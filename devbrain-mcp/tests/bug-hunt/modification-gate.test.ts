@@ -9,6 +9,8 @@ const evidence = (reference: string, overrides = {}) => ({
   confidence: 'high',
   phase: 'pre_modification',
   causal: true,
+  unknown: false,
+  affectedPaths: ['src/session/restore.js'],
   ...overrides,
 });
 
@@ -52,6 +54,9 @@ function reproducedCase(overrides: Record<string, unknown> = {}) {
       status: 'REPRODUCED',
       signature: 'sig-a',
       executionIds: ['exec-1'],
+      evidence: [evidence('exec-1', {
+        source: 'execution', executionId: 'exec-1', outcome: 'failed',
+      })],
     },
     ledger: { hypotheses: [supportedHypothesis()] },
     proposedChange: {
@@ -69,6 +74,9 @@ function reproducedCase(overrides: Record<string, unknown> = {}) {
       status: 'failing',
       executionId: 'exec-1',
       reportedMechanismObserved: true,
+      evidence: evidence('bridge-exec-1', {
+        source: 'execution', executionId: 'exec-1', outcome: 'failed', regressionBridge: true,
+      }),
     },
     expectedPostFix: {
       observation: 'The same focused check passes without the prior signature.',
@@ -115,12 +123,17 @@ describe('bug-hunt modification gate', () => {
       reproduction: {
         status: 'REPRODUCTION_NOT_AVAILABLE', signature: null, executionIds: [],
       },
+      ledger: { hypotheses: [supportedHypothesis({
+        supportingEvidence: [evidence('static-cause', { source: 'source' })],
+      })] },
       proposedChange: {
         hypothesisId: 'H1',
         files: [{
           path: 'tests/session/restore.test.js',
           role: 'regression_test',
-          evidence: evidence('src/session/restore.js:20-28', { source: 'source' }),
+          evidence: evidence('src/session/restore.js:20-28', {
+            source: 'source', affectedPaths: ['tests/session/restore.test.js'],
+          }),
         }],
         behaviorChange: 'Add a focused check for the reported mechanism.',
         contradictoryEvidenceAddressed: true,
@@ -251,7 +264,8 @@ describe('bug-hunt modification gate', () => {
     expect(reasons(result)).toContain('USER_DIRTY_PATH_OWNERSHIP_REQUIRED');
 
     input.proposedChange.files[0].ownershipEvidence = evidence('user-authorization', {
-      source: 'artifact',
+      source: 'artifact', authorization: 'user_authorized',
+      authorizedPaths: ['src/session/restore.js'],
     });
     result = assessModificationGate(input);
     expect(result.status).toBe('permitted');
@@ -304,5 +318,117 @@ describe('bug-hunt modification gate', () => {
     const result = assessModificationGate(input);
     expect(result).toMatchObject({ status: 'blocked', scope: 'none', allowedFiles: [] });
     expect(reasons(result)).toContain('INVALID_PROPOSED_FILE_ROLE');
+  });
+
+  it.each([
+    ['missing source', { source: undefined }],
+    ['unsupported source', { source: 'forged' }],
+    ['invalid classification', { classification: 'forged' }],
+    ['invalid confidence', { confidence: 'certain' }],
+    ['missing unknown marker', { unknown: undefined }],
+    ['malformed unknown marker', { unknown: 'false' }],
+  ])('blocks invalid %s in selected hypothesis evidence', (_label, override) => {
+    const input = reproducedCase();
+    input.ledger.hypotheses[0] = supportedHypothesis({
+      supportingEvidence: [evidence('bad-hypothesis-evidence', override)],
+    });
+
+    expect(assessModificationGate(input)).toMatchObject({ status: 'blocked', scope: 'none' });
+  });
+
+  it.each([
+    ['missing source', { source: undefined }],
+    ['unsupported source', { source: 'forged' }],
+    ['invalid classification', { classification: 'forged' }],
+    ['invalid confidence', { confidence: 'certain' }],
+    ['missing unknown marker', { unknown: undefined }],
+    ['malformed unknown marker', { unknown: 'false' }],
+  ])('blocks invalid %s in proposed-file evidence', (_label, override) => {
+    const input = reproducedCase();
+    input.proposedChange.files[0].evidence = evidence('bad-file-evidence', override);
+
+    expect(assessModificationGate(input)).toMatchObject({ status: 'blocked', scope: 'none' });
+  });
+
+  it('requires every proposed file evidence record to bind to that production path', () => {
+    const input = reproducedCase();
+    input.proposedChange.files[0].evidence = evidence('src/session/restore.js:20-28', {
+      source: 'source', affectedPaths: ['src/session/unrelated.js'],
+    });
+
+    expect(assessModificationGate(input)).toMatchObject({ status: 'blocked', scope: 'none', allowedFiles: [] });
+  });
+
+  it('requires every proposed file evidence record to bind to that regression-test path', () => {
+    const input = reproducedCase({
+      reproduction: { status: 'REPRODUCTION_NOT_AVAILABLE', signature: null, executionIds: [] },
+      ledger: { hypotheses: [supportedHypothesis({
+        supportingEvidence: [evidence('static-cause', { source: 'source' })],
+      })] },
+      proposedChange: {
+        hypothesisId: 'H1',
+        files: [{
+          path: 'tests/session/restore.test.js', role: 'regression_test',
+          evidence: evidence('static-cause', {
+            source: 'source', affectedPaths: ['tests/session/unrelated.test.js'],
+          }),
+        }],
+        behaviorChange: 'Add a focused static bridge.', contradictoryEvidenceAddressed: true,
+      },
+      regressionBridge: { status: 'unavailable', reason: 'No safe executable reproducer.', residualRisk: 'Static cause only.' },
+    });
+
+    expect(assessModificationGate(input)).toMatchObject({ status: 'blocked', scope: 'none', allowedFiles: [] });
+  });
+
+  it('permits unavailable reproduction only on strong static evidence', () => {
+    const input = reproducedCase({
+      reproduction: { status: 'REPRODUCTION_NOT_AVAILABLE', signature: null, executionIds: [] },
+      proposedChange: {
+        hypothesisId: 'H1',
+        files: [{
+          path: 'tests/session/restore.test.js', role: 'regression_test',
+          evidence: evidence('dynamic-cause', { affectedPaths: ['tests/session/restore.test.js'] }),
+        }],
+        behaviorChange: 'Add a focused bridge.', contradictoryEvidenceAddressed: true,
+      },
+      regressionBridge: { status: 'unavailable', reason: 'No safe executable reproducer.', residualRisk: 'Static cause only.' },
+    });
+
+    expect(assessModificationGate(input)).toMatchObject({ status: 'blocked', scope: 'none' });
+  });
+
+  it.each([
+    ['generic causal evidence', [{ path: 'src/session/restore.js', owner: 'user' }], evidence('unrelated-causal')],
+    ['missing owner', [{ path: 'src/session/restore.js' }], undefined],
+    ['unrecognized owner', [{ path: 'src/session/restore.js', owner: 'unknown-owner' }], undefined],
+    ['string dirty path with generic causal evidence', ['src/session/restore.js'], evidence('unrelated-causal')],
+  ])('fails closed for %s dirty-path record', (_label, dirtyPaths, ownershipEvidence) => {
+    const input = reproducedCase();
+    input.repositoryState.dirtyPaths = dirtyPaths;
+    input.proposedChange.files[0].ownershipEvidence = ownershipEvidence;
+
+    expect(assessModificationGate(input)).toMatchObject({ status: 'blocked', scope: 'none' });
+  });
+
+  it.each([
+    ['blank reproduction execution id', (input: ReturnType<typeof reproducedCase>) => {
+      input.reproduction.executionIds = [''];
+    }],
+    ['unlinked bridge execution id', (input: ReturnType<typeof reproducedCase>) => {
+      input.regressionBridge.executionId = 'unrelated-exec';
+      input.regressionBridge.evidence.executionId = 'unrelated-exec';
+    }],
+    ['bridge evidence from post modification', (input: ReturnType<typeof reproducedCase>) => {
+      input.regressionBridge.evidence.phase = 'post_modification';
+    }],
+    ['bridge evidence without explicit known status', (input: ReturnType<typeof reproducedCase>) => {
+      input.regressionBridge.evidence.unknown = undefined;
+    }],
+  ])('blocks %s', (_label, mutate) => {
+    const input = reproducedCase();
+    mutate(input);
+
+    expect(assessModificationGate(input)).toMatchObject({ status: 'blocked', scope: 'none' });
   });
 });
