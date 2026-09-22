@@ -37,6 +37,12 @@ const active = (id: string, overrides = {}) => ({
   ...overrides,
 });
 
+const without = (hypothesis: Record<string, unknown>, key: string) => {
+  const copy = { ...hypothesis };
+  delete copy[key];
+  return copy;
+};
+
 describe('bug-hunt hypothesis ledger', () => {
   it('enforces stable unique IDs and the three-active budget', () => {
     let ledger = createLedger();
@@ -104,10 +110,6 @@ describe('bug-hunt hypothesis ledger', () => {
       id: 'H1', from: 'ACTIVE', to: 'SUPPORTED', atPhase: 'post_modification',
       evidence: [observed('exec-pass', { phase: 'post_modification', outcome: 'passed' })], reason: 'test now passes',
     }, 'POST_EDIT_PASS_CANNOT_SUPPORT_HYPOTHESIS'],
-    ['missing prediction', active('H1', { prediction: '' }), {
-      id: 'H1', from: 'ACTIVE', to: 'SUPPORTED', atPhase: 'pre_modification',
-      evidence: [observed('exec-causal')], reason: 'observed',
-    }, 'HYPOTHESIS_PREDICTION_REQUIRED'],
     ['unfinished cheapest validation', active('H1', { cheapestValidation: {
       action: 'inspect', expectedSupport: 'branch is reached', expectedRejection: 'branch is not reached',
       completed: false, evidence: observed('inspection'),
@@ -131,7 +133,7 @@ describe('bug-hunt hypothesis ledger', () => {
     expect(() => transitionHypothesis(ledger, transition)).toThrow(error);
   });
 
-  it('accepts an observed failing regression bridge as pre-modification causal evidence', () => {
+  it('accepts an observed failing regression bridge as an independent causal path', () => {
     let ledger = createLedger();
     ledger = addHypothesis(ledger, active('H1', { supportingEvidence: [] }));
 
@@ -140,6 +142,7 @@ describe('bug-hunt hypothesis ledger', () => {
       evidence: [observed('bridge-exec', {
         regressionBridge: true,
         outcome: 'failed',
+        causal: false,
       })],
       reason: 'The deterministic bridge fails through the reported mechanism.',
     });
@@ -255,6 +258,7 @@ describe('bug-hunt hypothesis ledger', () => {
     ['unknown confidence', { confidence: 'unknown' }],
     ['missing phase', { phase: undefined }],
     ['post-modification', { phase: 'post_modification' }],
+    ['explicitly unknown', { confidence: 'medium', unknown: true }],
   ])('rejects %s cheapest-validation evidence for support', (_label, evidenceOverride) => {
     let ledger = createLedger();
     ledger = addHypothesis(ledger, active('H1', {
@@ -271,5 +275,96 @@ describe('bug-hunt hypothesis ledger', () => {
       id: 'H1', from: 'ACTIVE', to: 'SUPPORTED', atPhase: 'pre_modification',
       evidence: [observed('causal')], reason: 'causal check matched',
     })).toThrow('CHEAPEST_VALIDATION_EVIDENCE_NOT_PREMOD_OBSERVED');
+  });
+
+  it('never treats explicitly-unknown evidence as causal support', () => {
+    let ledger = createLedger();
+    ledger = addHypothesis(ledger, active('H1', { supportingEvidence: [] }));
+
+    expect(() => transitionHypothesis(ledger, {
+      id: 'H1', from: 'ACTIVE', to: 'SUPPORTED', atPhase: 'pre_modification',
+      evidence: [observed('unknown-ref', { confidence: 'medium', unknown: true })],
+      reason: 'an explicitly unknown reference is not causal support',
+    })).toThrow('PRE_MODIFICATION_CAUSAL_EVIDENCE_REQUIRED');
+  });
+
+  it('never treats a passing pre-modification result as causal support', () => {
+    let ledger = createLedger();
+    ledger = addHypothesis(ledger, active('H1', { supportingEvidence: [] }));
+
+    expect(() => transitionHypothesis(ledger, {
+      id: 'H1', from: 'ACTIVE', to: 'SUPPORTED', atPhase: 'pre_modification',
+      evidence: [observed('pre-pass', { outcome: 'passed' })],
+      reason: 'a passing check declared causal',
+    })).toThrow('PRE_MODIFICATION_CAUSAL_EVIDENCE_REQUIRED');
+  });
+
+  it('persists rejecting evidence as a contradiction that blocks later support', () => {
+    let ledger = createLedger();
+    ledger = addHypothesis(ledger, active('H1'));
+
+    ledger = transitionHypothesis(ledger, {
+      id: 'H1', from: 'ACTIVE', to: 'REJECTED', atPhase: 'pre_modification',
+      evidence: [observed('exec-reject', { effect: 'rejects', causal: false })],
+      reason: 'The focused regression never enters the suspected branch.',
+    });
+
+    expect(ledger.hypotheses[0].contradictingEvidence.map(({ reference }) => reference))
+      .toEqual(['exec-reject']);
+    expect(Object.isFrozen(ledger.hypotheses[0])).toBe(true);
+    expect(Object.isFrozen(ledger.hypotheses[0].contradictingEvidence)).toBe(true);
+
+    expect(() => transitionHypothesis(ledger, {
+      id: 'H1', from: 'REJECTED', to: 'SUPPORTED', atPhase: 'pre_modification',
+      evidence: [observed('exec-causal', { outcome: 'failed' })],
+      reason: 'flip back without addressing the rejection',
+    })).toThrow('HYPOTHESIS_CONTRADICTIONS_UNADDRESSED');
+    expect(ledger.hypotheses[0].status).toBe('REJECTED');
+    expect(ledger.hypotheses[0].transitions).toHaveLength(1);
+  });
+
+  it('blocks support when the same transition carries unaddressed rejecting evidence', () => {
+    let ledger = createLedger();
+    ledger = addHypothesis(ledger, active('H1'));
+
+    expect(() => transitionHypothesis(ledger, {
+      id: 'H1', from: 'ACTIVE', to: 'SUPPORTED', atPhase: 'pre_modification',
+      evidence: [
+        observed('exec-causal', { outcome: 'failed' }),
+        observed('exec-reject', { effect: 'rejects', causal: false }),
+      ],
+      reason: 'support alongside an unaddressed rejection',
+    })).toThrow('HYPOTHESIS_CONTRADICTIONS_UNADDRESSED');
+  });
+
+  it('requires an explicit prediction and cheapest validation at creation', () => {
+    expect(() => addHypothesis(createLedger(), without(active('H1'), 'prediction')))
+      .toThrow('HYPOTHESIS_PREDICTION_REQUIRED');
+    expect(() => addHypothesis(createLedger(), active('H1', { prediction: '' })))
+      .toThrow('HYPOTHESIS_PREDICTION_REQUIRED');
+    expect(() => addHypothesis(createLedger(), without(active('H1'), 'cheapestValidation')))
+      .toThrow('HYPOTHESIS_CHEAPEST_VALIDATION_REQUIRED');
+    expect(() => addHypothesis(createLedger(), active('H1', { cheapestValidation: undefined })))
+      .toThrow('HYPOTHESIS_CHEAPEST_VALIDATION_REQUIRED');
+  });
+
+  it('accepts an explicit null cheapest validation and still blocks support', () => {
+    const ledger = addHypothesis(createLedger(), active('H1', { cheapestValidation: null }));
+
+    expect(ledger.hypotheses[0].cheapestValidation).toBeNull();
+    expect(() => transitionHypothesis(ledger, {
+      id: 'H1', from: 'ACTIVE', to: 'SUPPORTED', atPhase: 'pre_modification',
+      evidence: [observed('exec-causal', { outcome: 'failed' })], reason: 'not validated yet',
+    })).toThrow('CHEAPEST_VALIDATION_NOT_COMPLETED');
+  });
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['non-object', 'H1'],
+  ])('rejects a %s transition before any lookup', (_label, transition) => {
+    const ledger = addHypothesis(createLedger(), active('H1'));
+    expect(() => transitionHypothesis(ledger, transition as never))
+      .toThrow('INVALID_HYPOTHESIS_TRANSITION');
   });
 });
