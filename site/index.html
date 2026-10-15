@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DevBrain MCP</title>
-<meta name="description" content="DevBrain is a local MCP server that gives coding agents evidence-backed facts about a repository and runs its build, tests, and lint only under explicit, pinned approval.">
+<title>DevBrain MCP | Evidence for coding agents</title>
+<meta name="description" content="DevBrain is a local MCP server with 26 repository-intelligence and trusted-execution tools for coding agents. Install it per project with npx.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23131C2E'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23F2A93B' stroke-width='4'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -195,10 +195,11 @@ section{padding-block:clamp(3.5rem,8vw,6.5rem);border-top:1px solid var(--line)}
       <p class="lede">DevBrain is a local MCP server that hands Claude Code, Codex, and any MCP client <strong>structured, evidence-backed facts</strong> about a repository — stack, Git state, dependencies, debt markers — and runs its build, tests, and lint only under <strong>explicit, pinned approval</strong>.</p>
       <div class="cta">
         <a class="btn btn-primary" href="#install">Install locally</a>
+        <a class="btn btn-ghost" href="https://www.npmjs.com/package/devbrain-mcp" target="_blank" rel="noopener">View on npm</a>
         <a class="btn btn-ghost" href="#security">Read the security model</a>
       </div>
       <div class="facts" aria-label="At a glance">
-        <span>v0.1.0</span><span>Runs on your machine</span><span>stdio transport</span><span>Node 20+</span>
+        <span>v0.6.0-rc.1</span><span>26 MCP tools</span><span>Project-scoped setup</span><span>Node 20+</span>
       </div>
     </div>
 
@@ -257,8 +258,8 @@ section{padding-block:clamp(3.5rem,8vw,6.5rem);border-top:1px solid var(--line)}
 <section id="tools" class="tools">
   <div class="wrap">
     <div class="sec-head">
-      <h2>Ten tools. Two kinds of trust.</h2>
-      <p>Five read the repository and never change it. Five execute or observe — and only what the repository itself already defines, only after you've approved it.</p>
+      <h2>26 tools. Two kinds of trust.</h2>
+      <p>Read-only inspection, context governance, architecture/change analysis, and trusted execution are exposed as separate capabilities. Commands run only from repository-defined scripts and only after approval.</p>
     </div>
 
     <div class="group">
@@ -290,40 +291,29 @@ section{padding-block:clamp(3.5rem,8vw,6.5rem);border-top:1px solid var(--line)}
 <section id="install">
   <div class="wrap">
     <div class="sec-head">
-      <h2>Install in three steps.</h2>
-      <p>Requires Node.js 20 or newer and Git. Your repository's own package manager or Python tooling is used for execution. Docker CLI access is needed only if you call <code>devbrain_inspect_docker</code>.</p>
+      <h2>Install per repository.</h2>
+      <p>Requires Node.js 20 or newer and Git. Setup is project-scoped, so unrelated Codex configuration is not treated as part of the install. Docker CLI access is needed only if you call <code>devbrain_inspect_docker</code>.</p>
     </div>
     <div class="steps">
       <div class="step">
-        <div><h3>Build the server</h3><p>DevBrain is a plain TypeScript project. There's nothing to publish or sign in to.</p></div>
+        <div><h3>Run setup</h3><p>From the root of a Git repository, install the release candidate with the one-command setup. It downloads the package through npm and configures the current project.</p></div>
         <div class="code">
-          <button class="copy" type="button" data-copy aria-label="Copy build commands">Copy</button>
-<pre><code><span class="c">cd</span> devbrain-mcp
-npm install
-npm run build</code></pre>
+          <button class="copy" type="button" data-copy aria-label="Copy setup command">Copy</button>
+<pre><code>npx -y devbrain-mcp@rc setup --yes</code></pre>
         </div>
       </div>
       <div class="step">
-        <div><h3>Point your MCP client at it</h3><p>Claude Code shown; any stdio MCP client works. <code>DEVBRAIN_WORKSPACE_ROOT</code> is the only directory DevBrain may inspect. It defaults to the process working directory.</p></div>
+        <div><h3>Check readiness</h3><p>Run the built-in doctor from the same repository. It reports the Git root, workspace boundary, persisted runtime, and exposed tool count without changing your source files.</p></div>
         <div class="code">
-          <button class="copy" type="button" data-copy aria-label="Copy MCP client configuration">Copy</button>
-<pre><code>{
-  <span class="k">"mcpServers"</span>: {
-    <span class="k">"devbrain"</span>: {
-      <span class="k">"command"</span>: <span class="s">"node"</span>,
-      <span class="k">"args"</span>: [<span class="s">"/path/to/devbrain-mcp/dist/index.js"</span>],
-      <span class="k">"cwd"</span>: <span class="s">"/path/to/your/workspace"</span>,
-      <span class="k">"env"</span>: { <span class="k">"DEVBRAIN_WORKSPACE_ROOT"</span>: <span class="s">"/path/to/your/workspace"</span> }
-    }
-  }
-}</code></pre>
+          <button class="copy" type="button" data-copy aria-label="Copy doctor command">Copy</button>
+<pre><code>npx -y devbrain-mcp@rc doctor --json</code></pre>
         </div>
       </div>
       <div class="step">
-        <div><h3>Verify it yourself</h3><p>The official MCP Inspector lists every tool, its schema, and its annotations. Call one before you trust it.</p></div>
+        <div><h3>Restart your client</h3><p>Restart Codex or your MCP client so it loads the new project configuration. Confirm you are still in the intended repository; DevBrain runs locally over stdio with no hosted account or API key.</p></div>
         <div class="code">
-          <button class="copy" type="button" data-copy aria-label="Copy inspector command">Copy</button>
-<pre><code>npx @modelcontextprotocol/inspector node dist/index.js</code></pre>
+          <button class="copy" type="button" data-copy aria-label="Copy project status command">Copy</button>
+<pre><code>git rev-parse --show-toplevel</code></pre>
         </div>
       </div>
     </div>
@@ -368,7 +358,7 @@ npm run build</code></pre>
   <div class="wrap">
     <div class="left">
       <a class="wordmark" href="#">DevBrain <small>MCP</small></a>
-      <small>Repository intelligence and trusted execution for coding agents. v0.1.0.</small>
+      <small>Repository intelligence and trusted execution for coding agents. v0.6.0-rc.1.</small>
     </div>
     <ul class="makers" aria-label="Made by">
       <li><a href="https://fiifiandy.dev" rel="noopener"><span class="logo-af" aria-hidden="true">AF<b>.</b></span><span>fiifiandy.dev</span></a></li>
