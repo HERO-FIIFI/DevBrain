@@ -1,29 +1,42 @@
 # DevBrain MCP
 
-DevBrain is a local MCP server for bounded repository intelligence, trusted engineering execution, durable execution evidence, and read-only Docker inspection. It provides structured facts and provenance to coding agents; it is not a code-generation agent.
+> Evidence-backed repository intelligence and trusted execution for coding agents.
 
-## Requirements and installation
+[![npm](https://img.shields.io/npm/v/devbrain-mcp?label=npm)](https://www.npmjs.com/package/devbrain-mcp)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-3c873a)](https://nodejs.org/)
+[![MCP](https://img.shields.io/badge/protocol-MCP-1f6feb)](https://modelcontextprotocol.io/)
+
+DevBrain is a local [Model Context Protocol](https://modelcontextprotocol.io/) server for coding agents. It turns a repository into bounded, machine-readable evidence: structure, dependencies, symbols, architecture, change impact, execution results, and durable provenance.
+
+It is not an autonomous coding agent. DevBrain supplies facts and controlled capabilities; the agent, reviewer, or developer remains responsible for deciding what to change.
+
+## Why DevBrain
+
+```text
+DISCOVER  →  RESOLVE  →  AUTHORIZE  →  EXECUTE  →  PARSE  →  EVIDENCE
+```
+
+- **Bounded context** — searches, slices, graphs, and context packs have explicit limits.
+- **Honest results** — `unknown`, `partial`, `unsupported`, and `not_run` are never disguised as success.
+- **Trusted execution** — build, test, targeted-test, and lint runs require capability-specific approval.
+- **Durable evidence** — outputs retain command, working directory, Git, timing, parser, and hash provenance.
+- **Local by default** — the server communicates over stdio and inspects only its configured workspace.
+
+## Quick start
 
 - Node.js 20 or newer
 - Git for repository identity and provenance
 - The repository's existing package manager or Python tooling for execution capabilities
 - Docker CLI and daemon access only when Docker inspection is requested
 
-```bash
-npm install
-npm run build
-```
-
-### Install for a project
-
-From the target Git repository, run:
+From the root of a Git repository, run:
 
 ```bash
-npx -y devbrain-mcp@latest setup --yes
-npx -y devbrain-mcp@latest doctor --json
+npx -y devbrain-mcp@rc setup --yes
+npx -y devbrain-mcp@rc doctor --json
 ```
 
-Setup installs a repository-scoped runtime under the user DevBrain home, writes only the DevBrain section in the repository's Codex configuration, preserves unrelated settings, performs an MCP handshake, and reports the 26-tool count. Restart Codex after setup so it reconnects. `--json` returns the package version, installation scope, configuration path, workspace root, preflight, handshake, restart, and next-action fields. Use `--dry-run` to inspect the plan. Global mode is intentionally unsupported because this server binds to one workspace per configuration.
+Setup installs a persistent project-scoped runtime under the user DevBrain home, writes only the DevBrain-owned section in the repository's Codex configuration, preserves unrelated settings, performs an MCP handshake, and reports the 26-tool count. Restart Codex after setup so it reconnects. `--json` returns package, installation, workspace, preflight, handshake, and next-action fields. Use `--dry-run` to inspect the plan. Global mode is intentionally unsupported because this server binds to one workspace per configuration.
 
 The installed launcher never points at the temporary npx cache. The durable runtime is replaced transactionally and failed activation restores the previous runtime/configuration. `devbrain uninstall --yes` removes only DevBrain-owned configuration.
 
@@ -41,6 +54,19 @@ Run the server over stdio with `npm start`. Set `DEVBRAIN_WORKSPACE_ROOT` to the
   }
 }
 ```
+
+## Capability map
+
+DevBrain exposes 26 deterministic tools across four layers:
+
+| Layer | What it covers |
+| --- | --- |
+| Repository intelligence | Maps, health, Git history, dependencies, and TODO markers. |
+| Trusted execution | Approved build, test, targeted-test, lint, and observational Docker inspection. |
+| Context governance | Bounded search, symbols, references, slices, diffs, diagnostics, and context packs. |
+| Architecture intelligence | Dependency graphs, APIs, routes, schemas, migrations, and change impact. |
+
+Static evidence is not runtime proof. A route is not proof of reachability, a schema is not proof of production state, and an impact candidate is not a predicted failure.
 
 ## Phase 1 — Repository Intelligence
 
@@ -306,12 +332,12 @@ Repositories, packages/workspaces, modules, files, and symbols remain distinct n
 - Package-manager and runtime availability can make a capability unsupported or leave version provenance unknown.
 - Docker results are a point-in-time observation, not proof of future health or isolation.
 
-## Phase 5 ? Distribution and environment hardening
+## Phase 5 — Distribution and environment hardening
 
 Phase 5 adds lifecycle administration outside the MCP tool surface:
 
 - `devbrain setup` discovers the Git root, validates Node/server/workspace paths, completes an MCP preflight, and installs repository-local configuration transactionally.
-- `devbrain doctor` performs read-only DB001?DB011 environment and configuration checks; `--json` returns the stable machine-readable report.
+- `devbrain doctor` performs read-only DB001–DB011 environment and configuration checks; `--json` returns the stable machine-readable report.
 - `devbrain doctor --repair` proposes evidence-backed paired path repairs, requires `--yes` for mutation, backs up first, validates afterward, and rolls back failure.
 - `devbrain uninstall` removes only DevBrain-owned MCP sections and preserves other Codex configuration.
 
@@ -327,3 +353,16 @@ npx @modelcontextprotocol/inspector node dist/index.js
 ```
 
 See [VERIFICATION.md](./VERIFICATION.md) for executed quality and acceptance evidence.
+
+## Documentation
+
+- [Lifecycle administration](./docs/phase5-lifecycle.md)
+- [Distribution architecture](./docs/phase6-distribution.md)
+- [Verification evidence](./VERIFICATION.md)
+- [Project website](../site/index.html)
+
+## Status
+
+Current package line: `0.6.0-rc.1`.
+
+This is a release candidate. Review the verification record and security boundaries before enabling trusted execution in a new environment.
