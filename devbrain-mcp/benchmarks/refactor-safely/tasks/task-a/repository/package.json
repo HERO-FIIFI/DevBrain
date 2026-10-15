@@ -1,0 +1,16 @@
+{
+  "name": "token-guard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "HMAC token issuing and validation with HTTP middleware, session restore, and a CLI inspector",
+  "scripts": {
+    "test": "node --test",
+    "test:targeted": "node --test tests/visible/auth-service.test.js",
+    "lint": "node scripts/lint.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

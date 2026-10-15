@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evals>
+  <qa_pair>
+    <question>Using devbrain_repo_map and devbrain_find_todos, what stack does fixtures/npm-react use and where is its explicit unfinished work?</question>
+    <answer>The fixture is a single-package TypeScript repository using npm and React, evidenced by package-lock.json and the React dependency in package.json. One TODO appears in src/main.tsx on line 1.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_repo_map and devbrain_project_health, is fixtures/pnpm-monorepo a monorepo and what onboarding hygiene concerns are visible?</question>
+    <answer>It is a pnpm TypeScript/React monorepo with apps/* and packages/* workspace patterns. The fixture has no README or .gitignore and no installed node_modules environment, so those observations are reported as red flags; no release judgment is made.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_repo_map and devbrain_dependency_audit, what can be proven about fixtures/python-poetry and its dependency maintenance state?</question>
+    <answer>The fixture is a Python single-package project using Poetry with Django declared in pyproject.toml. Direct inventory is complete and includes Django; outdated and vulnerability checks are not run because a stable supported structured Poetry check is unavailable, so the audit is partial rather than falsely clean.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_repo_map and devbrain_find_todos, what technologies and debt markers are present in fixtures/mixed-stack?</question>
+    <answer>The fixture contains JavaScript and Python, has conflicting npm and Yarn lockfile evidence plus pip metadata, and detects Express and Flask from dependency metadata. It contains two markers: HACK in src/server.js and XXX in worker.py.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_project_health and devbrain_git_history on the temporary Git test repository described by the test suite, what recent work and working state can be established?</question>
+    <answer>The test repository has two clean commits named first and second. A historyPath scoped to one.txt returns only the first commit, while project health can report its current branch, clean counts, missing upstream observation, and last commit metadata. These expected facts are created deterministically in tests/tools/git-history.test.ts rather than fabricated.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_repo_map and devbrain_run_tests against fixtures/execution/vitest-pass on first contact, can DevBrain state whether the fixture's tests pass?</question>
+    <answer>No. devbrain_repo_map identifies the requested fixture within the npm repository and includes its package configuration in bounded map evidence, but devbrain_run_tests returns status approval_required with an approvalId, the proposedInvocation it intends to run, and an execution-definition approval reason. Nothing is executed and no resultStatus is produced. This is absence of evidence, not a failing suite: approval_required is not an error and not a pass. Only after a human runs the separate devbrain CLI to approve that exact repository identity, capability, invocation, and definition fingerprint can the suite actually run.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_run_build and devbrain_project_health on fixtures/execution/build-fail once the build capability is approved, did DevBrain fail or did the build fail?</question>
+    <answer>The build failed; DevBrain succeeded. The fixture's build script exits 1 after writing "build failed" to stderr, so the tool returns status complete, executionStatus completed, resultStatus failed, and exitCode 1. It must not return status error, which is reserved for DevBrain being unable to perform the capability at all. devbrain_project_health independently reports the repository state the build ran against, so the failure is attributable to a specific tree rather than inferred.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_run_lint and devbrain_project_health, does a passing lint result prove the committed SHA is clean?</question>
+    <answer>Only when provenance.git.dirty is false. The provenance envelope carries sha, branch, dirty, and dirtyFileCount. When dirty is true the passing lint result proves something about that SHA combined with uncommitted working-tree state, not about the commit alone, and devbrain_project_health corroborates the same dirty counts. Phase 2 only reports this fact and does not decide whether dirty evidence is acceptable.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_run_tests and devbrain_run_targeted_tests on fixtures/execution/vitest-fail, how reliable are the reported test counts and which failing tests are named?</question>
+    <answer>The counts are parsed from runner text, not a machine-readable reporter, so the result carries parseMethod text_regex and parseConfidence medium, reporting 1 failed and 1 passed. No failing test is named: failingTests is empty and failingTestsReturned is 0 while failingTestsTotal is 1 and failingTestsTruncated is true. The identity of the failing test is therefore not evidence DevBrain can supply; devbrain_run_targeted_tests must be pointed at a validated repository-contained target to narrow it further.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_inspect_docker and devbrain_run_tests, are this project's expected containers healthy after its checks ran?</question>
+    <answer>Answerable only when the Docker daemon is actually reachable. When Docker is unavailable devbrain_inspect_docker reports that unavailability explicitly rather than returning an empty container list, because no containers observed and cannot observe are different claims. When Docker is available it reports container status, health, published ports, and sanitized mount metadata, never container environment variable values. Container health is independent of devbrain_run_tests: a passing suite is not evidence that any container is healthy, and the two results correlate only through the execution's recorded provenance.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_search_symbols and devbrain_find_references, where is validateToken defined in the controlled context fixture and what actually references it?</question>
+    <answer>validateToken has definitions in the TypeScript auth fixture and Python fixture, so an unqualified read is ambiguous rather than silently guessed. Symbol locations use deterministic language heuristics with medium confidence. References are bounded textual matches with low confidence, because textual occurrence does not prove semantic reference identity.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_get_execution_evidence and devbrain_diagnose_log, what useful failure signal can be returned without exposing the full stored log?</question>
+    <answer>The evidence tool returns execution/result state, Git and environment provenance, normalized test counts and parsing confidence, plus log byte sizes and hashes without raw log content. The diagnostic tool extracts a bounded primary error, failing-test clue, chained cause and file/line frames where recognizable, labels heuristic confidence, and retains the Phase 2 evidence as authoritative.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_get_diff and devbrain_search_symbols, what changed in the controlled authentication fixture and which directly named symbols are present?</question>
+    <answer>The structured diff reports complete file statistics before returning a bounded, redacted patch. Symbol search can then locate exact named TypeScript, JavaScript or Python definitions in changed files, but Phase 3 does not infer architecture or claim that every symbol in a changed file was behaviorally affected.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_context_pack and devbrain_read_symbol, what minimum context is selected for investigating validateToken under a one-file budget?</question>
+    <answer>An explicit validateToken symbol seed ranks its definition first, and the one-file budget prevents unrelated candidates from entering the pack. The item records its file/range, untrusted repository provenance and explicit_symbol reason; usage stays within the file, line and byte limits. read_symbol can reproduce the bounded definition or report ambiguity when the file is not specified.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_search_text and devbrain_read_file_slice, how does DevBrain handle secret-like values and prompt-like instructions stored in repository files?</question>
+    <answer>Both tools return repository text only as untrusted_content with file/line provenance. Secret-like values are replaced by [REDACTED] with redaction metadata. Prompt-like prose remains data for the caller to inspect and is never executed or treated as an instruction by DevBrain.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_dependency_graph and devbrain_architecture_map, what depends directly and transitively on a service, and which conclusions are observed rather than inferred?</question>
+    <answer>The dependency graph follows bounded import edges from file- or symbol-qualified seeds and reports direct and transitive nodes with source-line evidence, resolution method, confidence, depth, and truncation counts. The architecture map groups observable packages, entry points, routes, persistence files, tests, and dependencies; directory- or layer-based groupings are explicitly inferred. Static imports are not runtime calls, and an inferred service layer is not presented as an observed domain fact.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_route_inventory and devbrain_change_impact, which routes could be affected if an authentication service changes?</question>
+    <answer>The route inventory supplies declared HTTP method/path, handler, middleware, framework, source location, resolution state, and confidence. Change impact reverse-traverses bounded structural relationships from the service and emits related routes as potential interface impacts with an explicit relationshipPath and evidence. A high-confidence static path is still potential impact, not proof the route is reachable at runtime or will break.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_database_schema and devbrain_migration_status, what repository-defined database structures and migration state are related to a feature?</question>
+    <answer>The schema tool normalizes repository-declared ORM/DDL tables, columns, indexes, foreign keys, origins, and redacted datasource metadata. Migration status reports repository migration frameworks, ordering, latest identifiers, parseable operations, duplicates, gaps, missing dependencies, branches, or cycles. Both are static repository evidence: they do not connect to a database and cannot claim the production schema is current.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_get_diff and devbrain_change_impact, what could the current Git working-tree changes affect and what evidence supports each candidate?</question>
+    <answer>get_diff establishes exact changed paths, additions/deletions, bounded redacted patch content, and dirty Git provenance. Change impact reuses the same Git modes, resolves changed symbols where their ranges intersect diff hunks, then ranks bounded direct, transitive, interface, persistence, test, and configuration candidates. Every candidate is classified potential and includes a relationship path and evidence; an empty list means no supported static relationship was found, not that the change is safe.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using devbrain_change_impact and devbrain_context_pack, can change-impact evidence build a smaller relevant Context Pack without violating Phase 3 budgets?</question>
+    <answer>When architectureRelevance is enabled, the Context Pack may add at most ten deterministic impact candidates and ranks direct, interface, test, persistence, and transitive evidence ahead of plain exact-text relevance while preserving explicit seeds, stack evidence, and Git-diff priority. The existing file, line, and byte budgets remain authoritative; impact discovery cannot grow the pack, and every selected range retains its reason, hash, redaction state, and untrusted repository provenance.</answer>
+  </qa_pair>
+</evals>

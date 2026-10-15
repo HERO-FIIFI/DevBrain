@@ -1,0 +1,11 @@
+{
+  "statement": "PILOT_EXECUTION_APPROVED",
+  "approvedBy": "user",
+  "approvedAt": "2026-09-21",
+  "branch": "experiment/refactor-safely-pilot",
+  "readinessCommit": "48c123a5dfcb2d3eb4e3fa363b29c64e363ce7f5",
+  "scope": [
+    { "taskId": "task-a", "condition": "control", "repetition": 1 },
+    { "taskId": "task-a", "condition": "devbrain", "repetition": 1 }
+  ]
+}

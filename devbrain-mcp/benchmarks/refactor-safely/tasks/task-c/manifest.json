@@ -1,0 +1,33 @@
+{
+  "taskId": "task-c",
+  "title": "Rename the internal persistence field display_name to full_name",
+  "blastRadius": "high",
+  "visiblePrompt": "Rename the internal persistence field `display_name` to `full_name` across the SQL schema, the seed data, the row mapper/repository, the service, the API serializer, and the visible tests. The public API response field `displayName` and every route/service behavior must remain unchanged. Avoid unrelated edits and run appropriate verification.",
+  "allowedChangedFiles": [
+    "db/schema.sql",
+    "db/seed.sql",
+    "src/members/member-repository.js",
+    "src/members/member-service.js",
+    "src/api/member-serializer.js",
+    "tests/visible/member-repository.test.js",
+    "tests/visible/member-api.test.js"
+  ],
+  "requiredChangedFiles": [
+    "db/schema.sql",
+    "db/seed.sql",
+    "src/members/member-repository.js",
+    "src/members/member-service.js",
+    "src/api/member-serializer.js",
+    "tests/visible/member-repository.test.js"
+  ],
+  "maxChangedLines": 80,
+  "scopedIdentifiers": {
+    "old": "display_name",
+    "new": "full_name",
+    "preserved": ["displayName", "joined_at"]
+  },
+  "targetedCommand": { "executable": "node", "args": ["--test", "tests/visible/member-repository.test.js"] },
+  "lintCommand": { "executable": "node", "args": ["scripts/lint.mjs"] },
+  "buildCommand": { "executable": "node", "args": ["scripts/build.mjs"] },
+  "fullRegressionCommand": { "executable": "node", "args": ["--test"] }
+}

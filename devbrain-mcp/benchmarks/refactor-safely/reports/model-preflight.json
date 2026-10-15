@@ -1,0 +1,16 @@
+{
+  "requested": "gpt-5.6-sol",
+  "harnessVersion": "refactor-safely-harness@1",
+  "checkedAt": "2026-09-21T02:14:12.559Z",
+  "status": "BLOCKED",
+  "reason": "CLI surface lacks planned flags: --ask-for-approval",
+  "cliSurface": {
+    "status": "BLOCKED",
+    "missing": [
+      "--ask-for-approval"
+    ]
+  },
+  "catalog": null,
+  "resolved": null,
+  "evidence": null
+}

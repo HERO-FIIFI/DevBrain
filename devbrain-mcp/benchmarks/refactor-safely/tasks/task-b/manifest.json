@@ -1,0 +1,33 @@
+{
+  "taskId": "task-b",
+  "title": "Change OrderService.getOrder from a positional identifier to a request object",
+  "blastRadius": "medium",
+  "visiblePrompt": "Change the `OrderService.getOrder` contract from a positional identifier `getOrder(orderId)` to a named request object `getOrder({ orderId })` across the public contract, the implementation, the HTTP route, the CLI adapter, the test double, and the visible tests. Route and CLI behavior must remain unchanged. After the change, `getOrder` must reject a positional string argument with a `TypeError`. Avoid unrelated edits and run appropriate verification.",
+  "allowedChangedFiles": [
+    "src/orders/order-service-contract.js",
+    "src/orders/order-service.js",
+    "src/http/order-route.js",
+    "src/cli/show-order.js",
+    "tests/doubles/fake-order-service.js",
+    "tests/visible/order-service.test.js",
+    "tests/visible/order-route.test.js"
+  ],
+  "requiredChangedFiles": [
+    "src/orders/order-service-contract.js",
+    "src/orders/order-service.js",
+    "src/http/order-route.js",
+    "src/cli/show-order.js",
+    "tests/doubles/fake-order-service.js",
+    "tests/visible/order-service.test.js"
+  ],
+  "maxChangedLines": 100,
+  "scopedIdentifiers": {
+    "old": "getOrder",
+    "new": "getOrder",
+    "preserved": ["find"]
+  },
+  "targetedCommand": { "executable": "node", "args": ["--test", "tests/visible/order-service.test.js"] },
+  "lintCommand": { "executable": "node", "args": ["scripts/lint.mjs"] },
+  "buildCommand": { "executable": "node", "args": ["scripts/build.mjs"] },
+  "fullRegressionCommand": { "executable": "node", "args": ["--test"] }
+}

@@ -1,0 +1,1 @@
+{"name":"build-fail","private":true,"scripts":{"build":"node -e \"console.error('build failed');process.exit(1)\""}}

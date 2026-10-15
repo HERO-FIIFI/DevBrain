@@ -1,0 +1,48 @@
+{
+  "protocolVersion": "refactor-safely-pilot@1",
+  "status": "implementation_only_pilot_blocked",
+  "baseline": {
+    "commit": "d2f92462a650123304d3d7c0f1c8c5acc6e4a249",
+    "tag": "v0.4.0-phase4",
+    "mcpTools": 26,
+    "evaluations": 20
+  },
+  "model": {
+    "requested": "gpt-5.6-sol",
+    "resolvedMustEqualRequested": true,
+    "fallback": false
+  },
+  "conditions": ["control", "devbrain"],
+  "pilotMatrix": [
+    { "taskId": "task-a", "condition": "control", "repetition": 1 },
+    { "taskId": "task-a", "condition": "devbrain", "repetition": 1 }
+  ],
+  "preparedButNotExecutable": ["task-b", "task-c"],
+  "measurementDomains": [
+    "agent_visible_exposure",
+    "deterministic_filesystem_scanning",
+    "evaluator_reads"
+  ],
+  "agentVisibleCategories": [
+    "repository_source",
+    "devbrain_metadata",
+    "verification_output",
+    "task_instruction",
+    "skill_instruction",
+    "other_tool_output"
+  ],
+  "measurementConfidence": ["exact", "reported", "partial", "unknown"],
+  "unknownValue": null,
+  "outcomes": ["SUCCESS", "PARTIAL", "FAILURE", "HARNESS_ERROR"],
+  "separateResults": [
+    "patch_correctness",
+    "agent_verification_discipline",
+    "context_efficiency",
+    "latency"
+  ],
+  "executionGate": {
+    "requiredStatement": "PILOT_EXECUTION_APPROVED",
+    "requiresApprovedBy": true,
+    "currentlyAuthorized": false
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "refactor-safely-readiness@1",
+  "generatedAt": "2026-09-21",
+  "decision": "READY_FOR_EXECUTION_APPROVAL",
+  "branch": "experiment/refactor-safely-pilot",
+  "scope": {
+    "implementedTasks": [1, 2, 3, 4, 5, 6, 7, 8],
+    "pilotExecuted": false,
+    "modelDiscoveryExecuted": false,
+    "task9Status": "BLOCKED_PENDING_EXPLICIT_APPROVAL"
+  },
+  "phase4": {
+    "expectedCommit": "d2f92462a650123304d3d7c0f1c8c5acc6e4a249",
+    "masterCommit": "d2f92462a650123304d3d7c0f1c8c5acc6e4a249",
+    "tag": "v0.4.0-phase4",
+    "tagCommit": "d2f92462a650123304d3d7c0f1c8c5acc6e4a249",
+    "sourceAndEvaluationsDiff": [],
+    "toolRegistrations": 26,
+    "evaluations": 20,
+    "status": "PASS"
+  },
+  "verification": {
+    "benchmarkTests": {
+      "command": "npx vitest run tests/benchmark",
+      "testFiles": 16,
+      "tests": 133,
+      "status": "PASS"
+    },
+    "fullTests": {
+      "command": "npm test",
+      "testFiles": 43,
+      "tests": 254,
+      "status": "PASS"
+    },
+    "lint": { "command": "npm run lint", "status": "PASS" },
+    "build": { "command": "npm run build", "status": "PASS" },
+    "fixtureValidation": {
+      "command": "npm run benchmark:refactor-safely:validate",
+      "status": "PASS",
+      "codexLaunched": false,
+      "tasks": {
+        "task-a": {
+          "repositorySha": "76f12443b576d898552e8eac9d56750fd3c43e80",
+          "contentSha256": "62ce3c3bf75273dfed033f8bc624ffc7c8403da7678817a9e00aa8163919792b",
+          "files": 13,
+          "identical": true
+        },
+        "task-b": {
+          "repositorySha": "f0227880e6a55df8819e87776b825c591adf4da5",
+          "contentSha256": "6386f35017cc77d1e1d547521fdd1a8b2be89ec41166d5915889b7755ee97dd3",
+          "files": 14,
+          "identical": true
+        },
+        "task-c": {
+          "repositorySha": "ca817dd2ffb2c3020b08e720ca9020b0d7076f76",
+          "contentSha256": "50b92060f2ffd73542038462f7d6b2cf420fbb3ca695be74466cfbe2eff1634f",
+          "files": 15,
+          "identical": true
+        }
+      }
+    },
+    "instrumentationCoverage": {
+      "immutableArtifacts": "PASS",
+      "unknownPropagation": "PASS",
+      "intervalOverlapAndContextPackDoubleCounting": "PASS",
+      "conditionParityAndControlIsolation": "PASS",
+      "hiddenEvaluatorCanaryIsolation": "PASS",
+      "modelGateFailures": "PASS",
+      "outcomeDimensionSeparation": "PASS",
+      "pilotStopControl": "PASS"
+    },
+    "skill": {
+      "bundledValidatorPriorTaskResult": "PASS",
+      "deterministicScenarios": 8,
+      "deterministicScenarioTests": "PASS",
+      "liveForwardTests": "NOT_RUN_NOT_AUTHORIZED"
+    }
+  },
+  "remediation": {
+    "issue": "Windows taskkill may start but fail, leaving a timed-out child alive",
+    "commit": "7f4c1f6",
+    "focusedRegression": "PASS",
+    "durationMilliseconds": 1647
+  },
+  "unknowns": [
+    {
+      "field": "resolvedModel",
+      "value": null,
+      "reason": "Live model discovery and probe are prohibited until pilot execution approval."
+    },
+    {
+      "field": "skillLiveForwardTests",
+      "value": null,
+      "reason": "Fresh live Codex sessions are prohibited at this gate and remain a pre-pilot requirement."
+    },
+    {
+      "field": "subprocessFilesystemReads",
+      "value": null,
+      "reason": "Git, compiler, test-runner, and other subprocess-internal reads are not observable by the harness."
+    }
+  ],
+  "nextGate": {
+    "required": "Explicit pilot execution approval",
+    "then": [
+      "Run the live Skill forward-tests",
+      "Resolve requested and actual model exactly as gpt-5.6-sol",
+      "Execute Task A CONTROL repetition 1",
+      "Execute Task A DEVBrain repetition 1",
+      "Stop after the comparison report"
+    ],
+    "prohibited": ["Task B run", "Task C run", "additional repetitions", "push", "Phase 5"]
+  }
+}

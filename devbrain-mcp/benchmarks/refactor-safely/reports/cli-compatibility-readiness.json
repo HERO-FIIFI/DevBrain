@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "refactor-safely-cli-compatibility@1",
+  "generatedAt": "2026-09-21",
+  "verdict": "BLOCKED",
+  "nextGate": "NEW_RETRY_APPROVAL_AFTER_TRUSTWORTHY_ACTUAL_SESSION_MODEL_EVIDENCE_EXISTS",
+  "scope": {
+    "branch": "experiment/refactor-safely-pilot",
+    "blockedAttemptCommit": "e9700d0cecb33e6534814041922ca2ae14274db8",
+    "adapterCommit": "08f97c17674f0d182bcc597e71a3b59591edb6ec",
+    "measuredPilotRunsExecutedDuringRemediation": 0,
+    "taskAExecutionsDuringRemediation": 0
+  },
+  "installedCli": {
+    "identifier": "codex-cli 0.149.0-alpha.4.3",
+    "discoveryCommands": [
+      { "command": "codex --version", "exitCode": 0, "stdoutBytesLfNormalized": 28, "stdoutSha256": "9985b6ee638914f67503cb5b50e12273924bbae30af65417e7b3af86ced25c89" },
+      { "command": "codex --help", "exitCode": 0, "stdoutBytesLfNormalized": 5731, "stdoutSha256": "e8ecd554e6e3e870a55e540f1a21598c085cfee237f9c735ff9b5ba4ac4cf08a" },
+      { "command": "codex exec --help", "exitCode": 0, "stdoutBytesLfNormalized": 3957, "stdoutSha256": "e504bac5a6364566fbe408132dec7993639def9258ece34e8352f51f8d43687c" },
+      { "command": "codex mcp --help", "exitCode": 0, "stdoutBytesLfNormalized": 982, "stdoutSha256": "9e7d1a796b488470f391207bc994f268a100d85e7b2224e04b1514b8787bad09" },
+      { "command": "codex mcp list --help", "exitCode": 0, "stdoutBytesLfNormalized": 855, "stdoutSha256": "0436971e8964b5da4d13fee80507de6311f444e0717926a2da6df72ea681b245" },
+      { "command": "codex debug models --help", "exitCode": 0, "stdoutBytesLfNormalized": 934, "stdoutSha256": "6b856e8b57c3e466b52be3d179ffc760b6b7bcd1f09d16ebb9c2e78a8a9b1b6a" },
+      { "command": "codex debug prompt-input --help", "exitCode": 0, "stdoutBytesLfNormalized": 1032, "stdoutSha256": "d24c1bff8da56a7db440b036ff8f951ae658a07ceeb1f72ecce234d8b42ba54d" },
+      { "command": "codex features --help", "exitCode": 0, "stdoutBytesLfNormalized": 1061, "stdoutSha256": "dbbe49450f954f7ca9a00f761ef88842a3f24df3d864bbdfe57603f6dc36a804" },
+      { "command": "codex doctor --help", "exitCode": 0, "stdoutBytesLfNormalized": 1217, "stdoutSha256": "e871f367386c0782c71bd3d350d3093e38567ca1d2ad85e91add0c29952e6a1d" },
+      { "command": "codex app-server --help", "exitCode": 0, "stdoutBytesLfNormalized": 3206, "stdoutSha256": "95d290035d274e91e6f85b9af63e9a3fd2cf70a2295d9eedbfc23a2ee82d4383" }
+    ],
+    "execOptions": [
+      "--config", "--enable", "--disable", "--strict-config", "--image", "--model", "--oss", "--local-provider", "--profile", "--sandbox", "--approve-for-me", "--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust", "--cd", "--add-dir", "--thread-source", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--output-schema", "--color", "--json", "--output-last-message", "--help", "--version"
+    ],
+    "execUnsupportedAssumptions": ["--ask-for-approval"],
+    "inspectionInterfaces": ["doctor --json", "mcp list --json", "debug models", "debug prompt-input"]
+  },
+  "mapping": [
+    { "oldAssumption": "codex exec --ask-for-approval never", "actualInterface": "approval_policy = \"never\" in the isolated config.toml; verified as Never by doctor --json", "result": "equivalent" },
+    { "oldAssumption": "--ignore-user-config can coexist with treatment config", "actualInterface": "run-private CODEX_HOME with a generated config.toml; do not pass --ignore-user-config", "result": "remediated" },
+    { "oldAssumption": "debug models emits line-delimited model IDs", "actualInterface": "debug models emits a JSON object with a models array", "result": "parser remediated" },
+    { "oldAssumption": "doctor labels workspace-write as WorkspaceWrite", "actualInterface": "doctor reports filesystem restricted; literal --sandbox workspace-write and sandbox_mode = \"workspace-write\" remain the exact request evidence", "result": "parser remediated" },
+    { "oldAssumption": "exec --json reports the actual session model", "actualInterface": "successful exec JSONL has thread.started, turn.started, item.completed, and turn.completed but no model field", "result": "blocking" }
+  ],
+  "sharedLaunch": {
+    "args": ["exec", "--model", "gpt-5.6-sol", "--json", "--ephemeral", "--strict-config", "--sandbox", "workspace-write", "--ignore-rules", "<VISIBLE_TASK>"],
+    "approvalPolicy": "never",
+    "webSearch": "disabled",
+    "workspaceNetwork": false,
+    "shellEnvironmentInheritance": "none",
+    "resumeEnabled": false
+  },
+  "control": {
+    "codexHome": "run-private",
+    "generatedFiles": ["config.toml"],
+    "enabledMcpServers": [],
+    "visibleSkills": [],
+    "doctorApprovalPolicy": "Never",
+    "doctorConfiguredModel": "gpt-5.6-sol",
+    "doctorNetworkSandbox": "restricted"
+  },
+  "devbrain": {
+    "codexHome": "different run-private directory with the same common config",
+    "treatmentFiles": ["skills/refactor-safely/SKILL.md", "skills/refactor-safely/agents", "skills/refactor-safely/references", "AGENTS.md treatment pointer"],
+    "enabledMcpServers": ["devbrain"],
+    "visibleSkills": ["refactor-safely"],
+    "mcpRequired": true,
+    "doctorApprovalPolicy": "Never",
+    "doctorConfiguredModel": "gpt-5.6-sol",
+    "doctorNetworkSandbox": "restricted"
+  },
+  "isolationAudit": {
+    "status": "PASS",
+    "common": { "model": "gpt-5.6-sol", "approvalPolicy": "Never", "sandboxRequest": "workspace-write", "doctorFilesystem": "restricted", "network": "restricted" },
+    "onlyDelta": { "mcpServers": ["devbrain"], "skills": ["refactor-safely"] },
+    "controlTreatmentLeak": false,
+    "unrelatedUserConfigurationLoaded": false
+  },
+  "model": {
+    "requested": "gpt-5.6-sol",
+    "catalog": { "status": "ok", "containsRequested": true, "requestedIsAlias": false, "modelCount": 10, "sources": ["debug_models", "models_cache"] },
+    "nonBenchmarkProbe": {
+      "exitCode": 0,
+      "assistantText": "OK",
+      "eventTypes": ["thread.started", "turn.started", "item.completed", "turn.completed"],
+      "eventCount": 4,
+      "topLevelFields": ["item", "thread_id", "type", "usage"],
+      "modelFields": []
+    },
+    "configured": "gpt-5.6-sol",
+    "resolvedForActualSession": null,
+    "confidence": "unknown",
+    "reason": "The installed exec JSONL and stderr do not expose the actual session model. Catalog membership, config loading, command acceptance, and a successful response are not substituted for resolved-session evidence."
+  },
+  "verification": {
+    "benchmarkTests": { "command": "npx vitest run tests/benchmark", "files": 17, "tests": 140, "status": "PASS" },
+    "fullTests": { "command": "npm test", "files": 44, "tests": 261, "status": "PASS" },
+    "lint": { "command": "npm run lint", "status": "PASS" },
+    "build": { "command": "npm run build", "status": "PASS" },
+    "mcpTools": 26,
+    "evaluations": 20,
+    "phase4SourceAndEvaluationsDiff": [],
+    "blockedAttemptEvidenceDiff": []
+  },
+  "commits": [
+    { "sha": "e9700d0cecb33e6534814041922ca2ae14274db8", "role": "immutable blocked attempt evidence" },
+    { "sha": "08f97c17674f0d182bcc597e71a3b59591edb6ec", "role": "installed-CLI adapter remediation" },
+    { "sha": "071f01e", "role": "validated user cleanup: remove unused treatment binding" }
+  ],
+  "workingTreeAtHandoff": "clean after committing this report",
+  "decisionReason": "Condition isolation and approval equivalence are proven, but trustworthy actual-session resolved-model evidence is unavailable from the measured codex exec interface. No measured run may start."
+}

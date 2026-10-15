@@ -1,0 +1,8 @@
+import { z } from 'zod';
+import { executionEvidence } from '../context/execution-evidence.js';
+import { failure } from './common.js';
+
+const optionalString=z.string().optional(),optionalNumber=z.number().optional();
+export const getExecutionEvidenceInput=z.object({executionId:z.string().regex(/^exec_[A-Za-z0-9_-]{8,200}$/)});
+export const getExecutionEvidenceOutput=z.object({status:z.enum(['complete','error']),executionId:optionalString,repositoryId:optionalString,capability:optionalString,executionStatus:optionalString,resultStatus:optionalString,exitCode:optionalNumber,startedAt:optionalString,finishedAt:optionalString,durationMs:optionalNumber,command:z.object({executable:z.string(),args:z.array(z.string())}).optional(),cwd:optionalString,git:z.object({sha:optionalString,branch:optionalString,dirty:z.boolean().optional(),dirtyFileCount:optionalNumber}).optional(),environment:z.object({platform:optionalString,arch:optionalString,nodeVersion:optionalString,packageManager:optionalString,packageManagerVersion:optionalString}).optional(),test:z.object({framework:optionalString,passed:optionalNumber,failed:optionalNumber,skipped:optionalNumber,errors:optionalNumber,failingTestsTotal:optionalNumber}).optional(),parseMethod:optionalString,parseConfidence:optionalString,log:z.object({available:z.boolean(),stdoutBytes:z.number(),stderrBytes:z.number(),stdoutSha256:optionalString,stderrSha256:optionalString}).optional(),errorCode:optionalString,message:optionalString});
+export async function getExecutionEvidence(input:z.infer<typeof getExecutionEvidenceInput>){try{return{status:'complete' as const,...await executionEvidence(input.executionId)};}catch(error){return failure(error,'GET_EXECUTION_EVIDENCE_FAILED');}}

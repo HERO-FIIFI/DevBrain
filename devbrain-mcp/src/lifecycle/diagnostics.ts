@@ -1,0 +1,31 @@
+import {stat} from 'node:fs/promises';
+import {analyzeConfigCollisions,type ConfigDefinitionSource} from './config.js';
+import {check,type LifecycleCheck,type LifecycleResult} from './model.js';
+import {compareWorkspaceAndRepository} from './git-root.js';
+import {inspectDirectory,sameCanonicalPath} from './paths.js';
+
+export interface DoctorProbe{ok:boolean;reason:string;detail?:string;toolCount?:number}
+export interface DoctorInput{selectedWorkspace:string;repositoryRoot:string;server:string;node:string;definitions:ConfigDefinitionSource[];tomlValid:boolean;unrelatedPreserved:boolean;mcpProbe:DoctorProbe}
+export interface DoctorReport{schemaVersion:1;result:LifecycleResult;selectedWorkspace:string;repositoryRoot:string;mcpToolCount:number|null;checks:LifecycleCheck[]}
+async function isFile(candidate:string):Promise<boolean>{try{return (await stat(candidate)).isFile();}catch{return false;}}
+const explain=(value:string)=>value||'not configured';
+
+export async function runDoctor(input:DoctorInput):Promise<DoctorReport>{
+  const definition=input.definitions.at(-1)?.definition;const serverOk=await isFile(input.server);const nodeOk=await isFile(input.node);const cwd=await inspectDirectory(definition?.cwd??'');const workspace=await inspectDirectory(definition?.workspaceRoot??'');const rootsMatch=definition?await sameCanonicalPath(definition.cwd,definition.workspaceRoot):false;const relation=compareWorkspaceAndRepository(input.selectedWorkspace,input.repositoryRoot);const collision=analyzeConfigCollisions(input.definitions);
+  const checks:LifecycleCheck[]=[
+    check('DB001',serverOk?'PASS':'FAIL','DevBrain server',explain(input.server),'existing server file',serverOk?'The configured DevBrain server exists.':'The configured DevBrain server is missing or not a file.','Build DevBrain and select its verified dist/index.js.',false),
+    check('DB002',cwd.status==='PASS'||cwd.status==='WARN'?'PASS':'FAIL','Configured cwd',explain(definition?.cwd??''),cwd.status==='FAIL'?input.repositoryRoot:'existing directory',cwd.status==='FAIL'?'The configured cwd does not exist or is not a directory.':'The configured cwd exists.','Use the independently verified Git repository root.',cwd.status==='FAIL'&&Boolean(input.repositoryRoot)),
+    check('DB003',workspace.status==='PASS'||workspace.status==='WARN'?'PASS':'FAIL','DevBrain workspace root',explain(definition?.workspaceRoot??''),workspace.status==='FAIL'?input.repositoryRoot:'existing directory',workspace.status==='FAIL'?'DEVBRAIN_WORKSPACE_ROOT does not resolve to a directory.':'DEVBRAIN_WORKSPACE_ROOT exists.','Use the independently verified Git repository root.',workspace.status==='FAIL'&&Boolean(input.repositoryRoot)),
+    check('DB004',rootsMatch?'PASS':'FAIL','cwd and workspace agreement',`${explain(definition?.cwd??'')} | ${explain(definition?.workspaceRoot??'')}`,input.repositoryRoot,rootsMatch?'cwd and DEVBRAIN_WORKSPACE_ROOT resolve to the same directory.':'cwd and DEVBRAIN_WORKSPACE_ROOT do not resolve to the same directory.','Update both fields together to the verified repository root.',Boolean(input.repositoryRoot)),
+    check('DB005',relation.status,'Workspace and Git root',`${relation.workspace} | ${relation.repositoryRoot}`,relation.repositoryRoot,relation.relation==='same'?'Selected workspace is the Git root.':relation.relation==='workspace_contains_repository'?'The selected workspace contains a nested Git repository; DevBrain should normally target the repository root.':'Selected workspace and Git root differ.','Confirm multi-root intent or target the verified Git root.',relation.status!=='PASS'),
+    check('DB006',nodeOk?'PASS':'FAIL','Node.js runtime',explain(input.node),'existing Node executable',nodeOk?'The Node runtime exists.':'The Node runtime cannot be resolved.','Install Node.js 20+ or pass its verified executable.',false),
+    check('DB007',input.mcpProbe.ok?'PASS':'FAIL','DevBrain MCP initialization',input.mcpProbe.reason,'MCP_READY',input.mcpProbe.ok?'DevBrain completed MCP initialization and capability listing.':`DevBrain preflight failed${input.mcpProbe.detail?`: ${input.mcpProbe.detail}`:'.'}`,'Correct the runtime, server, cwd, or workspace before setup.',false),
+    check('DB008',collision.kind==='conflict'?'FAIL':collision.kind==='duplicate'?'WARN':'PASS','DevBrain config collisions',collision.kind,collision.kind==='conflict'?'one applicable definition':'no unresolved conflict',collision.kind==='conflict'?'Conflicting DevBrain definitions were discovered.':collision.kind==='duplicate'?'Equivalent definitions exist at multiple scopes.':'No unresolved applicable conflict exists.','Choose one supported config target and remove stale definitions explicitly.',collision.kind!=='single'&&collision.kind!=='none'),
+    check('DB009',input.tomlValid?'PASS':'FAIL','TOML validity',String(input.tomlValid),'true',input.tomlValid?'Configuration parses successfully.':'Configuration is malformed or uses unsupported syntax.','Repair TOML before activation.',false),
+    check('DB010',input.unrelatedPreserved?'PASS':'FAIL','Unrelated configuration preservation',String(input.unrelatedPreserved),'true',input.unrelatedPreserved?'Unrelated configuration is preserved.':'The proposed edit does not preserve unrelated configuration.','Abort the edit and retain original bytes.',false),
+    check('DB011',definition?.required&&!serverOk||definition?.required&&!nodeOk||definition?.required&&!input.mcpProbe.ok||definition?.required&&(cwd.status==='FAIL'||workspace.status==='FAIL'||!rootsMatch)?'FAIL':'PASS','Safe required activation',String(definition?.required??false),'preflight passes before required=true',definition?.required?'Required activation is evaluated against all critical preflight checks.':'No required activation is proposed.','Do not install required=true until every critical preflight passes.',false),
+  ];
+  const result:LifecycleResult=checks.some(item=>item.status==='FAIL')?'NOT_READY':checks.some(item=>item.status==='WARN')?'READY_WITH_WARNINGS':'READY';return {schemaVersion:1,result,selectedWorkspace:input.selectedWorkspace,repositoryRoot:input.repositoryRoot,mcpToolCount:input.mcpProbe.toolCount??null,checks};
+}
+export function doctorExitCode(report:DoctorReport):number{return report.result==='READY'?0:report.result==='READY_WITH_WARNINGS'?1:report.result==='NOT_READY'?2:3;}
+

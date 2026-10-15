@@ -1,0 +1,31 @@
+{
+  "taskId": "task-a",
+  "title": "Rename AuthService.validateToken to verifyToken",
+  "blastRadius": "low",
+  "visiblePrompt": "Rename `AuthService.validateToken()` to `AuthService.verifyToken()` throughout the repository without changing runtime behavior. Update necessary callers and tests, avoid unrelated edits, and run appropriate verification.",
+  "allowedChangedFiles": [
+    "src/auth/auth-service.js",
+    "src/http/auth-middleware.js",
+    "src/session/session-restorer.js",
+    "src/cli/inspect-token.js",
+    "tests/visible/auth-service.test.js",
+    "tests/visible/integration.test.js"
+  ],
+  "requiredChangedFiles": [
+    "src/auth/auth-service.js",
+    "src/http/auth-middleware.js",
+    "src/session/session-restorer.js",
+    "src/cli/inspect-token.js",
+    "tests/visible/auth-service.test.js"
+  ],
+  "maxChangedLines": 60,
+  "scopedIdentifiers": {
+    "old": "validateToken",
+    "new": "verifyToken",
+    "preserved": ["validateTokenFormat"]
+  },
+  "targetedCommand": { "executable": "node", "args": ["--test", "tests/visible/auth-service.test.js"] },
+  "lintCommand": { "executable": "node", "args": ["scripts/lint.mjs"] },
+  "buildCommand": { "executable": "node", "args": ["scripts/build.mjs"] },
+  "fullRegressionCommand": { "executable": "node", "args": ["--test"] }
+}

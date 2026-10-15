@@ -1,0 +1,16 @@
+{
+  "name": "order-desk",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Order lookup service with an HTTP route, a CLI adapter, and a test double",
+  "scripts": {
+    "test": "node --test",
+    "test:targeted": "node --test tests/visible/order-service.test.js",
+    "lint": "node scripts/lint.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

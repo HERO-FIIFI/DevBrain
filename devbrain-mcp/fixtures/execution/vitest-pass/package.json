@@ -1,0 +1,1 @@
+{"name":"vitest-pass","private":true,"scripts":{"test":"node run.cjs"},"devDependencies":{"vitest":"1.0.0"}}
