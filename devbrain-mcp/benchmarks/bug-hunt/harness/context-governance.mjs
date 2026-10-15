@@ -1,3 +1,5 @@
+import { CONFIDENCES, violation } from './contracts.mjs';
+
 export const CONTEXT_EXPANSION_REASONS = Object.freeze([
   'ambiguous_symbol',
   'truncated_references',
@@ -55,16 +57,18 @@ function hasNearestObservable(value) {
     && ['caller', 'test'].includes(value.type);
 }
 
+// Derived from the shared vocabulary rather than restating it.
+const LOW_CONFIDENCES = new Set(CONFIDENCES.slice(CONFIDENCES.indexOf('low')));
+
 function isLowConfidence(value) {
-  return ['low', 'unknown'].includes(value);
+  return LOW_CONFIDENCES.has(value);
 }
 
 function ambiguityNeedsCorroboration(evidence) {
   const ambiguity = evidence.ambiguity ?? {};
   return ambiguity.corroborated !== true
     || isLowConfidence(ambiguity.confidence)
-    || isLowConfidence(evidence.suspect?.confidence)
-    || (evidence.lowConfidenceResolution === true && ambiguity.corroborated !== true);
+    || isLowConfidence(evidence.suspect?.confidence);
 }
 
 function hasFalsifiablePrediction(prediction) {
@@ -90,7 +94,7 @@ function contextTriggers(evidence, reason) {
     add(evidence.impact?.eventId);
   }
   if (reason === 'low_confidence_resolution' && ambiguityNeedsCorroboration(evidence)) {
-    add(evidence.ambiguity?.eventId ?? evidence.suspect?.eventId ?? evidence.lowConfidenceEventId);
+    add(evidence.ambiguity?.eventId ?? evidence.suspect?.eventId);
   }
   if (reason === 'new_stack_frame') {
     addEvents(evidence.newStackFrames);
@@ -124,9 +128,57 @@ function overlaps(left, right) {
   return left.startLine <= right.endLine && right.startLine <= left.endLine;
 }
 
-function isBroadRead(expansion) {
+const DECLARED_BROAD_SCOPES = ['directory', 'repository', 'whole_directory', 'whole_repository'];
+const GLOB_CHARACTERS = /[*?[\]{}]/;
+const READ_TOOLS = new Set(['devbrain_read_symbol', 'devbrain_read_file_slice']);
+
+// A declared scope is a label. Only a concrete file target is structurally bounded.
+function isConcreteFile(file) {
+  if (!nonEmptyString(file)) return false;
+  if (GLOB_CHARACTERS.test(file) || file.endsWith('/')) return false;
+  const segments = normalizedFile(file).split('/');
+  return /\.[A-Za-z0-9]+$/.test(segments[segments.length - 1]);
+}
+
+function broadReadDetail(expansion) {
   const scope = expansion?.action?.scope ?? expansion?.scope ?? expansion?.read?.scope;
-  return ['directory', 'repository', 'whole_directory', 'whole_repository'].includes(scope);
+  if (DECLARED_BROAD_SCOPES.includes(scope)) {
+    return `declared scope ${scope} is not a bounded expansion`;
+  }
+  const targets = [
+    ['action target', expansionPart(expansion, 'file')],
+    ['read target', expansion?.read?.file],
+  ];
+  for (const [label, file] of targets) {
+    if (file !== undefined && file !== null && !isConcreteFile(file)) {
+      return `${label} ${JSON.stringify(file)} is a directory, glob, or extensionless prefix, not a concrete file`;
+    }
+  }
+  return null;
+}
+
+function frameForTrigger(evidence, trigger) {
+  const frames = [
+    ...(evidence.newStackFrames ?? []),
+    ...((evidence.diagnosticFrames ?? []).filter((frame) => frame?.new === true)),
+  ];
+  return frames.find((frame) => (frame?.eventId ?? frame?.id ?? frame?.trigger) === trigger) ?? null;
+}
+
+// The design permits a bounded slice *around that frame*; the spec states no line
+// count, so anchoring to the cited frame is the bound that is actually derivable.
+function stackFrameAnchorDetail(evidence, trigger, read) {
+  const frame = frameForTrigger(evidence, trigger);
+  if (!frame || !nonEmptyString(frame.file) || !Number.isInteger(frame.line)) {
+    return `frame ${JSON.stringify(trigger)} carries no file and line to anchor the slice to`;
+  }
+  if (normalizedFile(frame.file) !== normalizedFile(read.file)) {
+    return `slice of ${read.file} is not in the cited frame file ${frame.file}`;
+  }
+  if (read.startLine > frame.line || read.endLine < frame.line) {
+    return `slice ${read.startLine}-${read.endLine} does not contain frame line ${frame.line}`;
+  }
+  return null;
 }
 
 function isEditTarget(expansion) {
@@ -137,18 +189,21 @@ function isEditTarget(expansion) {
 
 function expansionViolations(evidence, expansion) {
   const violations = [];
-  const violate = (code, detail) => violations.push({ code, detail });
+  let trigger;
+  const violate = (code, detail, extra = []) => violations.push(
+    violation(code, detail, [trigger, ...extra].filter(nonEmptyString)),
+  );
   if (!expansion || typeof expansion !== 'object') {
     violate('INVALID_CONTEXT_EXPANSION', 'expansion must be an object');
     return violations;
   }
+  trigger = expansion.trigger ?? expansion.triggeringEvidence?.eventId;
 
   const { reason } = expansion;
   if (!CONTEXT_EXPANSION_REASONS.includes(reason)) {
     violate('INVALID_EXPANSION_REASON', `reason ${JSON.stringify(reason)} is not approved`);
     return violations;
   }
-  const trigger = expansion.trigger ?? expansion.triggeringEvidence?.eventId;
   if (!nonEmptyString(trigger)) violate('EXPANSION_TRIGGER_REQUIRED', 'expansion needs a triggering evidence event');
   else if (!contextTriggers(evidence, reason).includes(trigger)) {
     violate('EXPANSION_WITHOUT_TRIGGER', `no ${reason} evidence carries trigger ${trigger}`);
@@ -169,15 +224,23 @@ function expansionViolations(evidence, expansion) {
   if (tool === 'devbrain_read_symbol' && !nonEmptyString(expansionPart(expansion, 'symbol'))) {
     violate('SYMBOL_REQUIRED', 'devbrain_read_symbol requires a symbol');
   }
-  if (isBroadRead(expansion)) {
-    violate('UNJUSTIFIED_BROAD_READ', 'whole-directory and repository-wide reads are not bounded expansions');
+  const broadReason = broadReadDetail(expansion);
+  if (broadReason) violate('UNJUSTIFIED_BROAD_READ', broadReason);
+  if (READ_TOOLS.has(tool) && !read) {
+    violate('READ_RECORD_REQUIRED', `${tool} must record the file interval it read`);
   }
   if (reason === 'low_confidence_resolution' && isEditTarget(expansion)) {
     violate('LOW_CONFIDENCE_NOT_EDIT_TARGET', 'low-confidence evidence may authorize inspection, not an edit target');
   }
   if (read) {
-    if (!nonEmptyString(read.file) || !Number.isInteger(read.startLine) || !Number.isInteger(read.endLine) || read.startLine < 1 || read.endLine < read.startLine) {
+    const validInterval = nonEmptyString(read.file) && Number.isInteger(read.startLine)
+      && Number.isInteger(read.endLine) && read.startLine >= 1 && read.endLine >= read.startLine;
+    if (!validInterval) {
       violate('INVALID_READ_INTERVAL', 'read needs an inclusive repository file interval');
+    }
+    if (reason === 'new_stack_frame' && validInterval) {
+      const anchorReason = stackFrameAnchorDetail(evidence, trigger, read);
+      if (anchorReason) violate('UNANCHORED_STACK_FRAME_READ', anchorReason);
     }
     if (read.bytes !== null && (!Number.isInteger(read.bytes) || read.bytes < 0)) {
       violate('INVALID_READ_BYTES', 'read bytes must be an exact non-negative integer or null');
@@ -213,10 +276,16 @@ export function assessBugContext(evidence = {}) {
   if (ambiguityNeedsCorroboration(evidence)) {
     unmetCriteria.push(unmet('ambiguity_or_low_confidence_corroboration', 'ambiguous or low-confidence text lacks bounded corroboration'));
   }
-  if (evidence.impact?.truncated === true) {
-    unmetCriteria.push(unmet('truncated_references', 'directly relevant references were truncated'));
+  // Absent impact analysis is UNKNOWN, never "nothing was truncated".
+  const impact = evidence.impact;
+  if (impact?.truncated !== false) {
+    unmetCriteria.push(unmet('truncated_references', impact?.truncated === true
+      ? 'directly relevant references were truncated'
+      : 'reference truncation is unknown; no impact analysis was recorded'));
   }
-  if ((evidence.impact?.budgetExcluded ?? []).length > 0 || evidence.impact?.silentBudgetExclusion === true) {
+  if (!Array.isArray(impact?.budgetExcluded)) {
+    unmetCriteria.push(unmet('silent_budget_exclusion', 'budget exclusion is unknown; no impact analysis was recorded'));
+  } else if (impact.budgetExcluded.length > 0 || impact.silentBudgetExclusion === true) {
     unmetCriteria.push(unmet('silent_budget_exclusion', 'directly relevant candidates were budget-excluded'));
   }
   if (!hasFalsifiablePrediction(evidence.prediction)) {
@@ -313,17 +382,18 @@ export function checkContextBudget(trace = {}) {
   const summary = summarizeReads(trace.reads ?? []);
   const violations = [];
   if (expansions.length > 5) {
-    violations.push({
-      code: 'CONTEXT_EXPANSION_BUDGET_EXHAUSTED',
-      detail: `used ${expansions.length} expansions after the first pack; maximum is 5`,
-    });
+    violations.push(violation(
+      'CONTEXT_EXPANSION_BUDGET_EXHAUSTED',
+      `used ${expansions.length} expansions after the first pack; maximum is 5`,
+      expansions.map((expansion) => expansion?.eventId).filter(nonEmptyString),
+    ));
   }
   if (summary.duplicateIntervals.length > 0) {
-    violations.push({
-      code: 'DUPLICATE_READ_INTERVAL',
-      detail: `${summary.duplicateIntervals.length} read interval(s) overlap previously read material`,
-      intervals: summary.duplicateIntervals,
-    });
+    violations.push(violation(
+      'DUPLICATE_READ_INTERVAL',
+      `${summary.duplicateIntervals.length} read interval(s) overlap previously read material`,
+      [...new Set(summary.duplicateIntervals.flatMap(({ eventIds }) => eventIds))].filter(nonEmptyString),
+    ));
   }
   return {
     status: expansions.length > 5 ? 'exhausted' : 'within_budget',

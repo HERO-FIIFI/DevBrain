@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { assessModificationGate } from '../../benchmarks/bug-hunt/harness/modification-gate.mjs';
+import { classifyReproduction } from '../../benchmarks/bug-hunt/harness/reproduction.mjs';
 
 const evidence = (reference: string, overrides = {}) => ({
   source: 'test',
@@ -243,7 +244,8 @@ describe('bug-hunt modification gate', () => {
 
   it.each([
     ['empty allowlist', [], 'PROPOSED_FILES_REQUIRED'],
-    ['unqualified file', [{ path: 'restore.js', role: 'production_fix', evidence: evidence('source') }], 'FILE_PATH_NOT_REPOSITORY_QUALIFIED'],
+    ['backslash file', [{ path: 'src\\session\\restore.js', role: 'production_fix', evidence: evidence('source') }], 'FILE_PATH_NOT_REPOSITORY_QUALIFIED'],
+    ['current-directory segment', [{ path: 'src/./restore.js', role: 'production_fix', evidence: evidence('source') }], 'FILE_PATH_NOT_REPOSITORY_QUALIFIED'],
     ['absolute file', [{ path: 'C:/repo/src/restore.js', role: 'production_fix', evidence: evidence('source') }], 'FILE_PATH_NOT_REPOSITORY_QUALIFIED'],
     ['parent traversal', [{ path: '../src/restore.js', role: 'production_fix', evidence: evidence('source') }], 'FILE_PATH_NOT_REPOSITORY_QUALIFIED'],
     ['missing evidence', [{ path: 'src/session/restore.js', role: 'production_fix', evidence: null }], 'FILE_EVIDENCE_REQUIRED'],
@@ -430,5 +432,156 @@ describe('bug-hunt modification gate', () => {
     mutate(input);
 
     expect(assessModificationGate(input)).toMatchObject({ status: 'blocked', scope: 'none' });
+  });
+});
+
+function unavailableCase(overrides: Record<string, unknown> = {}) {
+  return reproducedCase({
+    reproduction: { status: 'REPRODUCTION_NOT_AVAILABLE', signature: null, executionIds: [] },
+    ledger: { hypotheses: [supportedHypothesis({
+      supportingEvidence: [evidence('static-cause', { source: 'source' })],
+    })] },
+    regressionBridge: {
+      status: 'unavailable',
+      reason: 'No safe executable reproducer exists yet.',
+      residualRisk: 'The static cause is not execution-confirmed.',
+    },
+    ...overrides,
+  });
+}
+
+describe('bug-hunt modification gate structural discipline', () => {
+  it('rejects production source that merely labels itself a regression test', () => {
+    const input = unavailableCase({
+      proposedChange: {
+        hypothesisId: 'H1',
+        files: [{
+          path: 'src/session/restore.js',
+          role: 'regression_test',
+          evidence: evidence('src/session/restore.js:20-28', { source: 'source' }),
+        }],
+        behaviorChange: 'Add a focused check for the reported mechanism.',
+        contradictoryEvidenceAddressed: true,
+      },
+    });
+
+    const result = assessModificationGate(input);
+    expect(result).toMatchObject({ status: 'blocked', scope: 'none', allowedFiles: [] });
+    expect(reasons(result)).toContain('FILE_ROLE_PATH_MISMATCH');
+  });
+
+  it('rejects a production fix parked at a regression-test path', () => {
+    const input = reproducedCase();
+    input.proposedChange.files = [{
+      path: 'tests/session/restore.test.js',
+      role: 'production_fix',
+      evidence: evidence('tests/session/restore.test.js:1-10', {
+        source: 'source', affectedPaths: ['tests/session/restore.test.js'],
+      }),
+    }];
+
+    const result = assessModificationGate(input);
+    expect(result).toMatchObject({ status: 'blocked', scope: 'none' });
+    expect(reasons(result)).toContain('FILE_ROLE_PATH_MISMATCH');
+  });
+
+  it('rejects a REPRODUCED reproduction backed only by a static source reference', () => {
+    const input = reproducedCase();
+    input.reproduction.evidence = [evidence('src/session/restore.js:20-28', {
+      source: 'source', executionId: 'exec-1', outcome: 'failed',
+    })];
+
+    const result = assessModificationGate(input);
+    expect(result).toMatchObject({ status: 'blocked', scope: 'none' });
+    expect(reasons(result)).toContain('REPRODUCTION_EVIDENCE_SOURCE_NOT_FAILURE_BEARING');
+  });
+
+  it('rejects a non-failing regression-bridge record as sole causal support', () => {
+    const blockedBridge = evidence('exec-bridge', {
+      causal: true, regressionBridge: true, outcome: 'blocked',
+    });
+    const input = reproducedCase({
+      ledger: { hypotheses: [supportedHypothesis({
+        supportingEvidence: [blockedBridge],
+        transitions: [{
+          id: 'H1', from: 'ACTIVE', to: 'SUPPORTED', atPhase: 'pre_modification',
+          reason: 'a blocked bridge run was treated as causal', evidence: [blockedBridge],
+        }],
+      })] },
+    });
+
+    const result = assessModificationGate(input);
+    expect(result).toMatchObject({ status: 'blocked', scope: 'none' });
+    expect(reasons(result)).toContain('CAUSAL_SUPPORT_REQUIRED');
+  });
+
+  it('consumes a real classifyReproduction result end to end', () => {
+    const attempt = (executionId: string) => ({
+      executionId,
+      invocationFingerprint: 'invoke-a',
+      repositorySha: 'repo-a',
+      environmentFingerprint: 'env-a',
+      result: 'failed',
+      failureSignature: 'sig-a',
+    });
+    const bridge = {
+      executionId: 'bridge-1',
+      result: 'failed',
+      failureSignature: 'sig-a',
+      reportedMechanismObserved: true,
+    };
+    const classified = classifyReproduction({
+      attempts: [attempt('exec-1'), attempt('exec-2')],
+      regressionBridge: bridge,
+    });
+    expect(classified.status).toBe('REPRODUCED');
+
+    const input = reproducedCase({
+      reproduction: classified,
+      regressionBridge: bridge,
+      reproductionEvidence: [
+        evidence('exec-1', { source: 'execution', executionId: 'exec-1', outcome: 'failed' }),
+        evidence('exec-2', { source: 'execution', executionId: 'exec-2', outcome: 'failed' }),
+        evidence('bridge-1', {
+          source: 'execution', executionId: 'bridge-1', outcome: 'failed', regressionBridge: true,
+        }),
+      ],
+    });
+
+    expect(assessModificationGate(input)).toMatchObject({
+      status: 'permitted', scope: 'production_fix', hypothesisId: 'H1', reasons: [],
+    });
+  });
+
+  it('authorizes a root-level repository file', () => {
+    const input = reproducedCase();
+    input.proposedChange.files = [{
+      path: 'vitest.config.ts',
+      role: 'production_fix',
+      evidence: evidence('vitest.config.ts:1-10', {
+        source: 'source', affectedPaths: ['vitest.config.ts'],
+      }),
+    }];
+
+    expect(assessModificationGate(input)).toMatchObject({
+      status: 'permitted', scope: 'production_fix', allowedFiles: ['vitest.config.ts'],
+    });
+  });
+
+  it('attaches evidence sources to every gate reason', () => {
+    const input = reproducedCase();
+    input.proposedChange.files[0].evidence = null;
+
+    const result = assessModificationGate(input);
+    for (const reason of result.reasons) expect(Array.isArray(reason.sources)).toBe(true);
+    expect(result.reasons.find(({ code }) => code === 'FILE_EVIDENCE_REQUIRED'))
+      .toMatchObject({ sources: ['src/session/restore.js'] });
+  });
+
+  it('names the hypothesis the caller must refine', () => {
+    const input = reproducedCase();
+    input.proposedChange.contradictoryEvidenceAddressed = false;
+
+    expect(assessModificationGate(input)).toMatchObject({ status: 'refine', hypothesisId: 'H1' });
   });
 });

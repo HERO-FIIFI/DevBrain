@@ -39,3 +39,22 @@ export async function poetryInventory(root: string): Promise<DependencyItem[]> {
   }
   return items;
 }
+
+// ponytail: line-based PEP 621 reader (uv projects), not a full TOML parser; swap in one if inline tables show up.
+export async function pep621Inventory(root: string): Promise<DependencyItem[]> {
+  const file = path.join(root, 'pyproject.toml'); if (!await exists(file)) return [];
+  const items: DependencyItem[] = []; let section = ''; let type: DependencyType | null = null;
+  for (const line of (await readFile(file, 'utf8')).split(/\r?\n/)) {
+    const bare = line.replace(/"[^"]*"|'[^']*'/g, '');
+    const header = /^\s*\[([^\]]+)\]\s*(#.*)?$/.exec(bare); if (header) { section = header[1].trim(); type = null; continue; }
+    const key = /^\s*([A-Za-z0-9_.-]+)\s*=\s*\[/.exec(bare);
+    if (key) type = section === 'project' && key[1] === 'dependencies' ? 'production' : section === 'project.optional-dependencies' ? 'optional' : section === 'dependency-groups' || (section === 'tool.uv' && key[1] === 'dev-dependencies') ? 'development' : null;
+    if (!type) continue;
+    for (const [, spec] of line.matchAll(/["']([^"']+)["']/g)) {
+      const match = /^([A-Za-z0-9_.-]+)(?:\[[^\]]*\])?\s*([^;]*)/.exec(spec.trim());
+      if (match) items.push({ name: match[1], declaredVersion: match[2].trim() || '*', installedVersion: null, dependencyType: type, ecosystem: 'python', source: 'pyproject.toml' });
+    }
+    if (bare.includes(']')) type = null;
+  }
+  return items;
+}

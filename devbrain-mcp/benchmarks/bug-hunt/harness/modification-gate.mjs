@@ -1,21 +1,20 @@
-import { validateEvidenceReference, violation } from './contracts.mjs';
+import {
+  FAILURE_EVIDENCE_SOURCES,
+  observedCausalEvidence,
+  preModificationObserved,
+  validateEvidenceReference,
+  violation,
+} from './contracts.mjs';
 
 const REPOSITORY_FILE_ROLE = new Set(['production_fix', 'regression_test']);
-const STRONG_CONFIDENCE = new Set(['high', 'medium']);
 const STATIC_EVIDENCE_SOURCES = new Set(['source', 'relationship']);
 const SAFE_DIRTY_PATH_OWNERS = new Set(['agent', 'system', 'task']);
+// The repository's own test convention: a directory segment or a test filename.
+const TEST_PATH_SEGMENTS = new Set(['test', 'tests', '__tests__', 'spec', 'specs']);
+const TEST_FILENAME = /\.(test|spec)\.[cm]?[jt]sx?$/;
 
 function text(value) {
   return typeof value === 'string' && value.trim() !== '';
-}
-
-function observedBeforeModification(evidence) {
-  return validKnownEvidence(evidence)
-    && evidence.classification === 'observed'
-    && evidence.phase === 'pre_modification'
-    && evidence.unknown !== true
-    && STRONG_CONFIDENCE.has(evidence.confidence)
-    && text(evidence.reference);
 }
 
 function validKnownEvidence(evidence) {
@@ -27,10 +26,24 @@ function validKnownEvidence(evidence) {
   return evidence.unknown === false;
 }
 
+function observedBeforeModification(evidence) {
+  return validKnownEvidence(evidence) && preModificationObserved(evidence);
+}
+
 function causalEvidence(evidence) {
-  if (!observedBeforeModification(evidence) || evidence.outcome === 'passed') return false;
-  return evidence.causal === true
-    || (evidence.regressionBridge === true && evidence.outcome === 'failed');
+  return validKnownEvidence(evidence) && observedCausalEvidence(evidence);
+}
+
+function failureBearing(evidence) {
+  return causalEvidence(evidence) && FAILURE_EVIDENCE_SOURCES.includes(evidence.source);
+}
+
+function evidenceSource(evidence) {
+  return evidence?.executionId ?? evidence?.reference ?? null;
+}
+
+function sourcesOf(records) {
+  return records.map(evidenceSource).filter(text);
 }
 
 function allHypothesisEvidence(hypothesis) {
@@ -63,8 +76,19 @@ function repositoryPath(path) {
   if (!text(path) || path.includes('\\') || path.startsWith('/') || /^[A-Za-z]:\//.test(path)) {
     return false;
   }
+  return path.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+}
+
+// Role is a self-declared label; the path is structure. They must agree.
+function isTestPath(path) {
   const segments = path.split('/');
-  return segments.length > 1 && segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+  return segments.slice(0, -1).some((segment) => TEST_PATH_SEGMENTS.has(segment))
+    || TEST_FILENAME.test(segments[segments.length - 1]);
+}
+
+function roleMatchesPath(role, path) {
+  if (!repositoryPath(path) || !REPOSITORY_FILE_ROLE.has(role)) return true;
+  return (role === 'regression_test') === isTestPath(path);
 }
 
 function isUserDirtyPath(dirtyPath, path) {
@@ -103,18 +127,26 @@ function permittedResult(scope, hypothesisId, allowedFiles) {
   };
 }
 
-function deniedResult(status, reasons) {
+function deniedResult(status, reasons, hypothesisId = null) {
   return {
     status,
     scope: 'none',
     reasons,
-    hypothesisId: null,
+    hypothesisId,
     allowedFiles: [],
   };
 }
 
-function addReason(reasons, code, detail) {
-  if (!reasons.some((reason) => reason.code === code)) reasons.push(violation(code, detail));
+function addReason(reasons, code, detail, sources = []) {
+  const existing = reasons.find((reason) => reason.code === code);
+  if (!existing) {
+    reasons.push(violation(code, detail, sources.filter(text)));
+    return;
+  }
+  // Codes dedupe, evidence does not: a repeated code accumulates every source.
+  for (const source of sources.filter(text)) {
+    if (!existing.sources.includes(source)) existing.sources.push(source);
+  }
 }
 
 function hasRecordedRepositoryState(repositoryState) {
@@ -131,30 +163,54 @@ function validExecutionIds(executionIds) {
     && new Set(executionIds).size === executionIds.length;
 }
 
-function validReproductionEvidence(reproduction) {
-  if (!validExecutionIds(reproduction?.executionIds) || !Array.isArray(reproduction.evidence)) return false;
-  const linkedIds = reproduction.evidence.map((evidence) => evidence?.executionId);
-  return reproduction.evidence.length > 0
-    && reproduction.evidence.every((evidence) => (
-      causalEvidence(evidence)
-      && text(evidence.executionId)
-      && reproduction.executionIds.includes(evidence.executionId)
-    ))
+// classifyReproduction returns a structured signature; a hand-built trace uses a string.
+function hasSignature(signature) {
+  return text(signature) || (!!signature && typeof signature === 'object');
+}
+
+// classifyReproduction carries no evidence records, so the caller may supply them
+// alongside the classification instead of grafting them onto its result.
+function reproductionRecords(reproduction, reproductionEvidence) {
+  return [
+    ...(Array.isArray(reproduction?.evidence) ? reproduction.evidence : []),
+    ...(Array.isArray(reproductionEvidence) ? reproductionEvidence : []),
+  ];
+}
+
+function validReproductionEvidence(reproduction, records) {
+  if (!validExecutionIds(reproduction?.executionIds) || records.length === 0) return false;
+  const linkedIds = records.map((evidence) => evidence?.executionId);
+  return records.every((evidence) => (
+    failureBearing(evidence)
+    && text(evidence.executionId)
+    && reproduction.executionIds.includes(evidence.executionId)
+  ))
     && reproduction.executionIds.every((executionId) => linkedIds.includes(executionId));
 }
 
-function validRegressionBridge(bridge, reproduction) {
+// reproduction.mjs reports a bridge as {result}; a hand-built trace uses {status}.
+function bridgeStatus(bridge) {
+  if (bridge?.status === 'failing' || bridge?.status === 'unavailable') return bridge.status;
+  if (bridge?.result === 'failed') return 'failing';
+  if (bridge?.result === 'blocked' || bridge?.result === 'unavailable') return 'unavailable';
+  return null;
+}
+
+function validRegressionBridge(bridge, reproduction, records) {
   if (!bridge || typeof bridge !== 'object') return false;
-  if (bridge.status === 'failing') {
+  const status = bridgeStatus(bridge);
+  if (status === 'failing') {
+    const evidence = bridge.evidence
+      ?? records.find((record) => record?.executionId === bridge.executionId);
     return text(bridge.executionId)
       && bridge.reportedMechanismObserved === true
       && reproduction?.executionIds?.includes(bridge.executionId)
-      && causalEvidence(bridge.evidence)
-      && bridge.evidence.executionId === bridge.executionId
-      && bridge.evidence.regressionBridge === true
-      && bridge.evidence.outcome === 'failed';
+      && failureBearing(evidence)
+      && evidence.executionId === bridge.executionId
+      && evidence.regressionBridge === true
+      && evidence.outcome === 'failed';
   }
-  if (bridge.status === 'unavailable') return text(bridge.reason) && text(bridge.residualRisk);
+  if (status === 'unavailable') return text(bridge.reason) && text(bridge.residualRisk);
   return false;
 }
 
@@ -165,6 +221,7 @@ function validRegressionBridge(bridge, reproduction) {
 export function assessModificationGate({
   repositoryState,
   reproduction,
+  reproductionEvidence,
   ledger,
   proposedChange,
   regressionBridge,
@@ -174,15 +231,25 @@ export function assessModificationGate({
   const refine = [];
 
   if (!hasRecordedRepositoryState(repositoryState)) {
-    addReason(blocked, 'REPOSITORY_STATE_NOT_RECORDED', 'repository state must be recorded before modification');
+    addReason(blocked, 'REPOSITORY_STATE_NOT_RECORDED', 'repository state must be recorded before modification', [repositoryState?.repositorySha, repositoryState?.branch]);
   }
 
+  const records = reproductionRecords(reproduction, reproductionEvidence);
+  if (reproduction?.status === 'REPRODUCED'
+    && records.some((evidence) => !FAILURE_EVIDENCE_SOURCES.includes(evidence?.source))) {
+    addReason(
+      blocked,
+      'REPRODUCTION_EVIDENCE_SOURCE_NOT_FAILURE_BEARING',
+      `reproduction evidence must come from ${FAILURE_EVIDENCE_SOURCES.join(', ')}, not a static reference`,
+      sourcesOf(records.filter((evidence) => !FAILURE_EVIDENCE_SOURCES.includes(evidence?.source))),
+    );
+  }
   const reproductionAvailable = reproduction?.status === 'REPRODUCED'
-    && text(reproduction.signature)
-    && validReproductionEvidence(reproduction);
+    && hasSignature(reproduction.signature)
+    && validReproductionEvidence(reproduction, records);
   const reproductionUnavailable = reproduction?.status === 'REPRODUCTION_NOT_AVAILABLE';
   if (!reproductionAvailable && !reproductionUnavailable) {
-    addReason(blocked, 'EXPLICIT_REPRODUCTION_REQUIRED', 'an explicit reproduced or unavailable status is required');
+    addReason(blocked, 'EXPLICIT_REPRODUCTION_REQUIRED', 'an explicit reproduced or unavailable status is required', reproduction?.executionIds ?? []);
   }
 
   const hypothesisId = proposedChange?.hypothesisId;
@@ -190,22 +257,22 @@ export function assessModificationGate({
     ? ledger.hypotheses.find((candidate) => candidate?.id === hypothesisId)
     : null;
   if (!hypothesis || hypothesis.status !== 'SUPPORTED') {
-    addReason(blocked, 'SUPPORTED_HYPOTHESIS_REQUIRED', 'the authoritative ledger must contain a supported hypothesis');
+    addReason(blocked, 'SUPPORTED_HYPOTHESIS_REQUIRED', 'the authoritative ledger must contain a supported hypothesis', [hypothesisId]);
   }
 
   if (!text(hypothesis?.prediction)) {
-    addReason(blocked, 'CAUSAL_PREDICTION_REQUIRED', 'the supported hypothesis needs an explicit causal prediction');
+    addReason(blocked, 'CAUSAL_PREDICTION_REQUIRED', 'the supported hypothesis needs an explicit causal prediction', [hypothesisId]);
   }
   const hypothesisEvidence = allHypothesisEvidence(hypothesis);
   if (!hypothesisEvidenceIsValid(hypothesis)) {
-    addReason(blocked, 'INVALID_EVIDENCE_REQUIRED', 'all ledger evidence must satisfy the evidence contract and be explicitly known');
+    addReason(blocked, 'VALID_EVIDENCE_REQUIRED', 'all ledger evidence must satisfy the evidence contract and be explicitly known', sourcesOf(hypothesisEvidence));
   }
   if (!hypothesisEvidence.some(causalEvidence)) {
-    addReason(blocked, 'CAUSAL_SUPPORT_REQUIRED', 'causal support must be observed before modification at medium or high confidence');
+    addReason(blocked, 'CAUSAL_SUPPORT_REQUIRED', 'causal support must be observed before modification at medium or high confidence', sourcesOf(hypothesisEvidence));
   }
   if (!hypothesis?.cheapestValidation || hypothesis.cheapestValidation.completed !== true
     || !observedBeforeModification(hypothesis.cheapestValidation.evidence)) {
-    addReason(blocked, 'CHEAPEST_VALIDATION_NOT_COMPLETED', 'the cheapest validation needs completed observed pre-modification evidence');
+    addReason(blocked, 'CHEAPEST_VALIDATION_NOT_COMPLETED', 'the cheapest validation needs completed observed pre-modification evidence', [evidenceSource(hypothesis?.cheapestValidation?.evidence)]);
   }
 
   const contradictionsAddressed = proposedChange?.contradictoryEvidenceAddressed === true
@@ -213,36 +280,39 @@ export function assessModificationGate({
       ? hypothesis.contradictingEvidence.every((evidence) => evidence?.addressed === true)
       : false);
   if (!contradictionsAddressed) {
-    addReason(refine, 'CONTRADICTORY_EVIDENCE_UNADDRESSED', 'material contradictory evidence must be addressed before modification');
+    addReason(refine, 'CONTRADICTORY_EVIDENCE_UNADDRESSED', 'material contradictory evidence must be addressed before modification', sourcesOf(hypothesis?.contradictingEvidence ?? []));
   }
 
   if (!text(proposedChange?.behaviorChange)) {
-    addReason(blocked, 'BEHAVIOR_CHANGE_REQUIRED', 'the proposed behavior change must be bounded and explicit');
+    addReason(blocked, 'BEHAVIOR_CHANGE_REQUIRED', 'the proposed behavior change must be bounded and explicit', [hypothesisId]);
   }
-  if (!validRegressionBridge(regressionBridge, reproduction)) {
-    addReason(blocked, 'REGRESSION_BRIDGE_EVIDENCE_REQUIRED', 'a failing bridge or recorded limitation with residual risk is required');
+  if (!validRegressionBridge(regressionBridge, reproduction, records)) {
+    addReason(blocked, 'REGRESSION_BRIDGE_EVIDENCE_REQUIRED', 'a failing bridge or recorded limitation with residual risk is required', [regressionBridge?.executionId]);
   }
   if (!text(expectedPostFix?.observation)) {
-    addReason(blocked, 'EXPECTED_POST_FIX_OBSERVATION_REQUIRED', 'a post-fix observation must be declared before modification');
+    addReason(blocked, 'EXPECTED_POST_FIX_OBSERVATION_REQUIRED', 'a post-fix observation must be declared before modification', [hypothesisId]);
   }
 
   const files = proposedChange?.files;
   if (!Array.isArray(files) || files.length === 0) {
-    addReason(blocked, 'PROPOSED_FILES_REQUIRED', 'at least one evidence-bounded proposed file is required');
+    addReason(blocked, 'PROPOSED_FILES_REQUIRED', 'at least one evidence-bounded proposed file is required', [hypothesisId]);
   } else {
     const seenPaths = new Set();
     for (const file of files) {
+      const source = text(file?.path) ? file.path : '<unnamed>';
       if (!repositoryPath(file?.path)) {
-        addReason(blocked, 'FILE_PATH_NOT_REPOSITORY_QUALIFIED', 'proposed paths must be repository-qualified files');
+        addReason(blocked, 'FILE_PATH_NOT_REPOSITORY_QUALIFIED', 'proposed paths must be repository-relative files', [source]);
       }
       if (!REPOSITORY_FILE_ROLE.has(file?.role)) {
-        addReason(blocked, 'INVALID_PROPOSED_FILE_ROLE', 'proposed file roles must be production_fix or regression_test');
+        addReason(blocked, 'INVALID_PROPOSED_FILE_ROLE', 'proposed file roles must be production_fix or regression_test', [source]);
+      } else if (!roleMatchesPath(file.role, file.path)) {
+        addReason(blocked, 'FILE_ROLE_PATH_MISMATCH', 'the declared role contradicts the path structure; a regression test must live at a test path and a production fix must not', [source]);
       }
       if (!causalEvidence(file?.evidence) || !evidenceBindsPath(file?.evidence, file?.path)) {
-        addReason(blocked, 'FILE_EVIDENCE_REQUIRED', 'each proposed file needs strong observed pre-modification causal evidence');
+        addReason(blocked, 'FILE_EVIDENCE_REQUIRED', 'each proposed file needs strong observed pre-modification causal evidence', [source]);
       }
       if (seenPaths.has(file?.path)) {
-        addReason(blocked, 'DUPLICATE_PROPOSED_FILE', 'each proposed file may appear only once');
+        addReason(blocked, 'DUPLICATE_PROPOSED_FILE', 'each proposed file may appear only once', [source]);
       }
       seenPaths.add(file?.path);
       if (Array.isArray(repositoryState?.dirtyPaths)
@@ -250,28 +320,30 @@ export function assessModificationGate({
           isUserDirtyPath(dirtyPath, file?.path) === 'authorization_required'
         ))
         && !ownershipEvidenceAuthorizesPath(file?.ownershipEvidence, file?.path)) {
-        addReason(blocked, 'USER_DIRTY_PATH_OWNERSHIP_REQUIRED', 'a user-dirty path needs explicit ownership evidence');
+        addReason(blocked, 'USER_DIRTY_PATH_OWNERSHIP_REQUIRED', 'a user-dirty path needs explicit ownership evidence', [source]);
       }
     }
   }
 
   const containsProductionFix = Array.isArray(files) && files.some((file) => file?.role === 'production_fix');
   const containsOnlyRegressionTests = Array.isArray(files) && files.length > 0
-    && files.every((file) => file?.role === 'regression_test');
-  if (reproductionUnavailable && containsProductionFix) {
-    addReason(blocked, 'PRODUCTION_FIX_REQUIRES_REPRODUCTION', 'production fixes require an explicit reproduction');
-  }
+    && files.every((file) => file?.role === 'regression_test' && roleMatchesPath(file.role, file.path));
   if (reproductionUnavailable && !containsOnlyRegressionTests) {
-    addReason(blocked, 'PRODUCTION_FIX_REQUIRES_REPRODUCTION', 'unavailable reproduction can authorize regression tests only');
+    addReason(
+      blocked,
+      'PRODUCTION_FIX_REQUIRES_REPRODUCTION',
+      'unavailable reproduction can authorize regression-test files only',
+      (Array.isArray(files) ? files : []).filter((file) => file?.role !== 'regression_test').map(({ path }) => path),
+    );
   }
   if (reproductionUnavailable && (!hypothesisEvidence.some(staticCausalEvidence)
     || !Array.isArray(files)
     || !files.every((file) => staticCausalEvidence(file?.evidence)))) {
-    addReason(blocked, 'STATIC_EVIDENCE_REQUIRED', 'unavailable reproduction requires strong static evidence for every regression-test file');
+    addReason(blocked, 'STATIC_EVIDENCE_REQUIRED', 'unavailable reproduction requires strong static evidence for every regression-test file', sourcesOf(hypothesisEvidence));
   }
 
   if (blocked.length > 0) return deniedResult('blocked', blocked);
-  if (refine.length > 0) return deniedResult('refine', refine);
+  if (refine.length > 0) return deniedResult('refine', refine, hypothesis.id);
   return permittedResult(
     containsProductionFix ? 'production_fix' : 'regression_test_only',
     hypothesis.id,

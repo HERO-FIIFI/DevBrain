@@ -9,6 +9,7 @@ describe('stack detector', () => {
     ['pnpm-monorepo', ['pnpm'], ['React'], ['TypeScript'], 'monorepo'],
     ['python-pip', ['pip'], ['FastAPI'], ['Python'], 'single-package'],
     ['python-poetry', ['poetry'], ['Django'], ['Python'], 'single-package'],
+    ['python-uv', ['uv'], ['FastAPI'], ['Python'], 'single-package'],
     ['mixed-stack', ['npm', 'yarn', 'pip'], ['Express', 'Flask'], ['JavaScript', 'Python'], 'single-package'],
     ['unknown', [], [], [], 'single-package'],
   ] as const)('detects %s', async (name, managers, frameworks, languages, repositoryType) => {

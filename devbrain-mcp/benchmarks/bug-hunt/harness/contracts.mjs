@@ -25,6 +25,30 @@ export const EVIDENCE_CLASSIFICATIONS = Object.freeze(['observed', 'inferred', '
 export const CONFIDENCES = Object.freeze(['high', 'medium', 'low', 'unknown']);
 const EVIDENCE_SOURCES = new Set(['execution', 'diagnostic', 'source', 'relationship', 'test', 'artifact']);
 
+// Only these sources can carry an observed failure; a static file reference cannot.
+export const FAILURE_EVIDENCE_SOURCES = Object.freeze(['execution', 'diagnostic', 'artifact']);
+
+export function preModificationObserved(evidence) {
+  return !!evidence
+    && evidence.classification === 'observed'
+    && evidence.unknown !== true
+    && (evidence.confidence === 'high' || evidence.confidence === 'medium')
+    && evidence.phase === 'pre_modification';
+}
+
+/**
+ * The single causal-evidence predicate. Every consumer shares it so the gate and
+ * the ledger cannot drift apart on what counts as pre-modification causation.
+ */
+export function observedCausalEvidence(evidence) {
+  if (!preModificationObserved(evidence)) return false;
+  // A passing result is never causal support for a bug hypothesis.
+  if (evidence.outcome === 'passed') return false;
+  // A pre-fix regression bridge is causal only when it actually failed.
+  if (evidence.regressionBridge === true) return evidence.outcome === 'failed';
+  return evidence.causal === true;
+}
+
 export function violation(code, detail, sources = []) {
   return { code, detail, sources };
 }

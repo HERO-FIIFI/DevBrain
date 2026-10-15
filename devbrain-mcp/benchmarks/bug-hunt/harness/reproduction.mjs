@@ -1,4 +1,5 @@
 import { validateEvidenceReference, violation } from './contracts.mjs';
+import { classifyStability } from './fix-attempts.mjs';
 
 const ATTEMPT_RESULTS = new Set(['passed', 'failed', 'blocked', 'unavailable']);
 const FAILURE_EVIDENCE_SOURCES = new Set(['execution', 'diagnostic', 'artifact']);
@@ -44,16 +45,22 @@ function assertUniqueExecutionIds(attempts, bridge) {
   }
 }
 
-function structuralKey(value) {
-  if (Array.isArray(value)) return `[${value.map(structuralKey).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${structuralKey(value[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
-
-function sameSignature(left, right) {
-  return structuralKey(left) === structuralKey(right);
+// The bridge runs in the same series as the attempts by construction, so it is
+// classified alongside them rather than compared by a second signature routine.
+function bridgeAsAttempt(bridge, attempts) {
+  const series = attempts[0] ?? {
+    invocationFingerprint: 'regression-bridge',
+    repositorySha: 'regression-bridge',
+    environmentFingerprint: 'regression-bridge',
+  };
+  return {
+    invocationFingerprint: series.invocationFingerprint,
+    repositorySha: series.repositorySha,
+    environmentFingerprint: series.environmentFingerprint,
+    executionId: bridge.executionId,
+    result: bridge.result,
+    failureSignature: bridge.failureSignature,
+  };
 }
 
 function result(status, stability, confidence, signature, executionIds, limitations = [], violations = []) {
@@ -109,93 +116,90 @@ export function classifyReproduction({ attempts = [], externalEvidence = null, r
     ...(regressionBridge?.result === 'passed' ? [regressionBridge] : []),
   ];
   const attemptEvidence = unavailableAttemptEvidence(attempts, regressionBridge);
+  const stability = classifyStability(
+    regressionBridge ? [...attempts, bridgeAsAttempt(regressionBridge, attempts)] : attempts,
+  );
+  const violations = [...attemptEvidence.violations, ...stability.violations];
+  const matching = stability.signatureGroups.length <= 1;
   const confidenceWithAvailability = (confidence) => (
     attemptEvidence.violations.length > 0 && confidence === 'high' ? 'medium' : confidence
   );
 
-  if (failures.length > 1) {
-    const signatures = failures.map(({ failureSignature }) => failureSignature);
-    const matching = signatures.every((signature) => sameSignature(signature, signatures[0]));
-    if (!matching && regressionBridge?.result === 'failed') {
-      return result(
-        'PARTIALLY_REPRODUCED',
-        'REPEATED_INSTABILITY',
-        'medium',
-        null,
-        executionIds,
-        attemptEvidence.limitations,
-        [
-          ...attemptEvidence.violations,
-          violation(
-            'REGRESSION_BRIDGE_SIGNATURE_CONFLICT',
-            'regression bridge failure signature conflicts with ordinary reproduction evidence',
-            [regressionBridge.executionId],
-          ),
-        ],
-      );
-    }
+  if (failures.length > 1 && !matching && regressionBridge?.result === 'failed') {
+    return result(
+      'PARTIALLY_REPRODUCED',
+      stability.kind,
+      'medium',
+      null,
+      executionIds,
+      attemptEvidence.limitations,
+      [
+        ...violations,
+        violation(
+          'REGRESSION_BRIDGE_SIGNATURE_CONFLICT',
+          'regression bridge failure signature conflicts with ordinary reproduction evidence',
+          [regressionBridge.executionId],
+        ),
+      ],
+    );
   }
 
   if (failures.length > 0 && passes.length > 0) {
-    const signatures = failures.map(({ failureSignature }) => failureSignature);
-    const matching = signatures.every((signature) => sameSignature(signature, signatures[0]));
     return result(
       'PARTIALLY_REPRODUCED',
-      matching ? 'SUSPECTED_FLAKY' : 'REPEATED_INSTABILITY',
+      stability.kind,
       'medium',
-      matching ? signatures[0] : null,
+      matching ? failures[0].failureSignature : null,
       executionIds,
       attemptEvidence.limitations,
-      attemptEvidence.violations,
+      violations,
     );
   }
 
   if (failures.length > 0) {
-    const signatures = failures.map(({ failureSignature }) => failureSignature);
-    const matching = signatures.every((signature) => sameSignature(signature, signatures[0]));
     if (!matching) {
       return result(
         'PARTIALLY_REPRODUCED',
-        'REPEATED_INSTABILITY',
+        stability.kind,
         'medium',
         null,
         executionIds,
         attemptEvidence.limitations,
-        attemptEvidence.violations,
+        violations,
       );
     }
     if (failures.length === 1) {
       const bridgeOnly = failures[0] === regressionBridge;
       return result(
         bridgeOnly && !regressionBridge.reportedMechanismObserved ? 'PARTIALLY_REPRODUCED' : 'REPRODUCED',
-        'UNKNOWN',
+        stability.kind,
         'medium',
-        signatures[0],
+        failures[0].failureSignature,
         executionIds,
         ['stability is unknown after one observed failure', ...attemptEvidence.limitations],
-        attemptEvidence.violations,
+        violations,
       );
     }
     return result(
       'REPRODUCED',
-      'DETERMINISTIC_FAILURE',
+      stability.kind,
       confidenceWithAvailability('high'),
-      signatures[0],
+      failures[0].failureSignature,
       executionIds,
       attemptEvidence.limitations,
-      attemptEvidence.violations,
+      violations,
     );
   }
 
   if (passes.length > 0) {
     return result(
       'NOT_REPRODUCED',
-      'UNKNOWN',
+      stability.kind,
       confidenceWithAvailability('high'),
       null,
       executionIds,
       attemptEvidence.limitations,
-      attemptEvidence.violations,
+      violations,
     );
   }
 
@@ -229,32 +233,32 @@ export function classifyReproduction({ attempts = [], externalEvidence = null, r
     if (externalViolation) {
       return result(
         'REPRODUCTION_NOT_AVAILABLE',
-        'UNKNOWN',
+        stability.kind,
         'unknown',
         null,
         executionIds,
         ['external evidence did not establish an observed failure signature', ...attemptEvidence.limitations],
-        [...attemptEvidence.violations, externalViolation],
+        [...violations, externalViolation],
       );
     }
     return result(
       'PARTIALLY_REPRODUCED',
-      'UNKNOWN',
+      stability.kind,
       externalEvidence.confidence,
       externalEvidence.failureSignature ?? null,
       executionIds,
       ['failure was preserved as external evidence but not reproduced in this session', ...attemptEvidence.limitations],
-      attemptEvidence.violations,
+      violations,
     );
   }
 
   return result(
     'REPRODUCTION_NOT_AVAILABLE',
-    'UNKNOWN',
+    stability.kind,
     'unknown',
     null,
     executionIds,
     ['no executable attempt or immutable external failure evidence was available', ...attemptEvidence.limitations],
-    attemptEvidence.violations,
+    violations,
   );
 }

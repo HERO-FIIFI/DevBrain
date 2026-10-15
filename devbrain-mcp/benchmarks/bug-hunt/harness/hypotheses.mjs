@@ -1,6 +1,8 @@
 import {
   CONFIDENCES,
   HYPOTHESIS_STATUSES,
+  observedCausalEvidence as observedCausal,
+  preModificationObserved,
   validateEvidenceReference,
 } from './contracts.mjs';
 
@@ -50,22 +52,6 @@ function findHypothesis(ledger, id) {
   const index = ledger.hypotheses.findIndex((hypothesis) => hypothesis.id === id);
   if (index === -1) throw new Error('HYPOTHESIS_NOT_FOUND');
   return { hypothesis: ledger.hypotheses[index], index };
-}
-
-function observedCausal(evidence) {
-  if (!preModificationObserved(evidence)) return false;
-  // A passing result is never causal support for a bug hypothesis.
-  if (evidence.outcome === 'passed') return false;
-  // A failing pre-fix regression bridge is itself the causal demonstration.
-  if (evidence.regressionBridge === true) return evidence.outcome === 'failed';
-  return evidence.causal === true;
-}
-
-function preModificationObserved(evidence) {
-  return evidence.classification === 'observed'
-    && evidence.unknown !== true
-    && (evidence.confidence === 'high' || evidence.confidence === 'medium')
-    && evidence.phase === 'pre_modification';
 }
 
 function assertSupportThreshold(hypothesis, transition) {

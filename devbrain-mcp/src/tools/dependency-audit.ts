@@ -6,6 +6,7 @@ import { pnpmAdapter } from '../lib/dependency/adapters/pnpm.js';
 import { yarnAdapter } from '../lib/dependency/adapters/yarn.js';
 import { pipAdapter } from '../lib/dependency/adapters/pip.js';
 import { poetryAdapter } from '../lib/dependency/adapters/poetry.js';
+import { uvAdapter } from '../lib/dependency/adapters/uv.js';
 import { failure, toolRoot } from './common.js';
 
 export const dependencyAuditInput = z.object({ path: z.string().optional(), limit: z.number().int().min(1).max(500).default(200) });
@@ -17,7 +18,7 @@ const checkSchema = z.object({
   findings: z.array(z.union([outdatedFindingSchema, vulnerabilityFindingSchema])).optional(), summary: z.record(z.string(), z.number()).optional(), reason: z.string().optional(),
 });
 export const dependencyAuditOutput = z.object({ status: z.enum(['complete', 'partial', 'unsupported', 'error']), requestedPath: z.string().optional(), repositoryRoot: z.string().optional(), packageManagers: z.array(z.string()).optional(), inventoryStatus: z.enum(['complete', 'unsupported']).optional(), inventory: z.array(dependencyItemSchema).optional(), outdated: z.array(checkSchema).optional(), vulnerabilities: z.array(checkSchema).optional(), totalCount: z.number().int().optional(), returnedCount: z.number().int().optional(), truncated: z.boolean().optional(), limit: z.number().int().optional(), errorCode: z.string().optional(), message: z.string().optional() });
-const adapters: Record<string, DependencyAdapter> = { npm: npmAdapter, pnpm: pnpmAdapter, yarn: yarnAdapter, pip: pipAdapter, poetry: poetryAdapter };
+const adapters: Record<string, DependencyAdapter> = { npm: npmAdapter, pnpm: pnpmAdapter, yarn: yarnAdapter, pip: pipAdapter, poetry: poetryAdapter, uv: uvAdapter };
 
 export async function dependencyAudit(input: z.infer<typeof dependencyAuditInput>) {
   try {

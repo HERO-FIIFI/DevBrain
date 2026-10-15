@@ -80,7 +80,7 @@ describe('bug-hunt context governance', () => {
       ['ambiguous_symbol', { ambiguity: { corroborated: false, eventId: 'ambiguity-1' } }, 'ambiguity-1', 'devbrain_read_symbol'],
       ['truncated_references', { impact: { truncated: true, eventId: 'truncation-1' } }, 'truncation-1', 'devbrain_find_references'],
       ['low_confidence_resolution', { ambiguity: { corroborated: false, eventId: 'confidence-1', confidence: 'low' } }, 'confidence-1', 'devbrain_read_file_slice'],
-      ['new_stack_frame', { newStackFrames: [{ eventId: 'frame-1', file: 'src/worker.mjs', line: 11 }] }, 'frame-1', 'devbrain_read_file_slice'],
+      ['new_stack_frame', { newStackFrames: [{ eventId: 'frame-1', file: 'src/session/restore.mjs', line: 30 }] }, 'frame-1', 'devbrain_read_file_slice'],
       ['failed_hypothesis', { failedHypotheses: [{ eventId: 'hypothesis-1', id: 'H1' }] }, 'hypothesis-1', 'devbrain_read_file_slice'],
       ['unexpected_dependency', { unexpectedDependencies: [{ eventId: 'dependency-1', file: 'src/db.mjs' }] }, 'dependency-1', 'devbrain_change_impact'],
       ['new_test_failure', { newTestFailures: [{ eventId: 'test-1', file: 'tests/session/restore.test.mjs', line: 18 }] }, 'test-1', 'devbrain_read_file_slice'],
@@ -169,6 +169,148 @@ describe('bug-hunt context governance', () => {
       expansionsMaximum: 5,
       duplicateIntervals: [],
       violations: [expect.objectContaining({ code: 'CONTEXT_EXPANSION_BUDGET_EXHAUSTED' })],
+    });
+  });
+});
+
+const frameContext = {
+  ...completeContext,
+  newStackFrames: [{ eventId: 'frame-1', file: 'src/worker.mjs', line: 11 }],
+};
+
+function codes(result: { violations: { code: string }[] }) {
+  return result.violations.map(({ code }) => code);
+}
+
+describe('bug-hunt context governance structural discipline', () => {
+  it('rejects an undeclared whole-tree read', () => {
+    const result = gradeContextExpansion(frameContext, {
+      reason: 'new_stack_frame',
+      trigger: 'frame-1',
+      hypothesis: 'H1',
+      action: { tool: 'devbrain_read_file_slice', file: 'src' },
+      read: {
+        file: 'src',
+        startLine: 1,
+        endLine: 999999,
+        bytes: 90000000,
+        source: 'devbrain_slice',
+        trigger: 'frame-1',
+        eventId: 'r1',
+      },
+    });
+
+    expect(result.permitted).toBe(false);
+    expect(codes(result)).toContain('UNJUSTIFIED_BROAD_READ');
+  });
+
+  it('rejects a glob dependency-graph target', () => {
+    const result = gradeContextExpansion(
+      { ...completeContext, unexpectedDependencies: [{ eventId: 'dependency-1' }] },
+      {
+        reason: 'unexpected_dependency',
+        trigger: 'dependency-1',
+        hypothesis: 'H1',
+        action: { tool: 'devbrain_dependency_graph', file: '**/*' },
+      },
+    );
+
+    expect(codes(result)).toContain('UNJUSTIFIED_BROAD_READ');
+  });
+
+  it('requires a new_stack_frame slice to be anchored to the cited frame', () => {
+    const result = gradeContextExpansion(frameContext, {
+      reason: 'new_stack_frame',
+      trigger: 'frame-1',
+      hypothesis: 'H1',
+      action: { tool: 'devbrain_read_file_slice', file: 'src/session/restore.mjs' },
+      read: {
+        file: 'src/session/restore.mjs',
+        startLine: 20,
+        endLine: 40,
+        bytes: 510,
+        source: 'devbrain_slice',
+        trigger: 'frame-1',
+        eventId: 'read-unanchored',
+      },
+    });
+
+    expect(codes(result)).toContain('UNANCHORED_STACK_FRAME_READ');
+  });
+
+  it('requires a slice expansion to record the read it performed', () => {
+    const result = gradeContextExpansion(frameContext, {
+      reason: 'new_stack_frame',
+      trigger: 'frame-1',
+      hypothesis: 'H1',
+      action: { tool: 'devbrain_read_file_slice', file: 'src/worker.mjs' },
+    });
+
+    expect(codes(result)).toContain('READ_RECORD_REQUIRED');
+  });
+
+  it('treats absent impact analysis as unknown rather than clean', () => {
+    const unmet = assessBugContext({}).unmet.map(({ reason }) => reason);
+
+    expect(unmet).toContain('truncated_references');
+    expect(unmet).toContain('silent_budget_exclusion');
+  });
+
+  it('emits contract-shaped violations that carry their sources', () => {
+    const result = gradeContextExpansion(frameContext, {
+      reason: 'new_stack_frame',
+      trigger: 'frame-1',
+      hypothesis: 'H1',
+      action: { tool: 'devbrain_read_file_slice', file: 'src' },
+      read: {
+        file: 'src',
+        startLine: 1,
+        endLine: 999999,
+        bytes: 90000000,
+        source: 'devbrain_slice',
+        trigger: 'frame-1',
+        eventId: 'r1',
+      },
+    });
+
+    for (const violation of result.violations) expect(Array.isArray(violation.sources)).toBe(true);
+    expect(result.violations.find(({ code }) => code === 'UNJUSTIFIED_BROAD_READ'))
+      .toMatchObject({ sources: ['frame-1'] });
+  });
+
+  it('rejects a missing trigger and an unapproved reason', () => {
+    expect(codes(gradeContextExpansion(frameContext, {
+      reason: 'new_stack_frame',
+      hypothesis: 'H1',
+      action: { tool: 'devbrain_read_file_slice', file: 'src/worker.mjs' },
+      read: {
+        file: 'src/worker.mjs', startLine: 5, endLine: 20, bytes: 210,
+        source: 'devbrain_slice', trigger: 'frame-1', eventId: 'read-no-trigger',
+      },
+    }))).toContain('EXPANSION_TRIGGER_REQUIRED');
+
+    expect(codes(gradeContextExpansion(frameContext, {
+      reason: 'curiosity',
+      trigger: 'frame-1',
+      hypothesis: 'H1',
+      action: { tool: 'devbrain_read_file_slice', file: 'src/worker.mjs' },
+    }))).toEqual(['INVALID_EXPANSION_REASON']);
+  });
+
+  it('reports duplicate read intervals and the within-budget boundary', () => {
+    const read = (startLine: number, endLine: number, eventId: string) => ({
+      file: 'src/session/restore.mjs', startLine, endLine, bytes: 100,
+      source: 'devbrain_slice' as const, trigger: 'frame-1', eventId,
+    });
+
+    expect(checkContextBudget({
+      reads: [read(10, 30, 'read-1'), read(25, 40, 'read-2')],
+      expansions: Array.from({ length: 5 }, (_, index) => ({ eventId: `expansion-${index + 1}` })),
+    })).toMatchObject({
+      status: 'within_budget',
+      expansionsUsed: 5,
+      expansionsMaximum: 5,
+      violations: [expect.objectContaining({ code: 'DUPLICATE_READ_INTERVAL', sources: ['read-1', 'read-2'] })],
     });
   });
 });

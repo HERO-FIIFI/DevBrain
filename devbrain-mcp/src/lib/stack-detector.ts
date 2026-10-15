@@ -19,7 +19,7 @@ export interface StackDetection {
 const languageExtensions: Record<string, string> = {
   '.ts': 'TypeScript', '.tsx': 'TypeScript', '.js': 'JavaScript', '.jsx': 'JavaScript', '.mjs': 'JavaScript', '.cjs': 'JavaScript', '.py': 'Python',
 };
-const configs = new Set(['package.json', 'tsconfig.json', 'pyproject.toml', 'requirements.txt', 'poetry.lock', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'eslint.config.js', '.eslintrc', 'vite.config.ts', 'next.config.js']);
+const configs = new Set(['package.json', 'tsconfig.json', 'pyproject.toml', 'requirements.txt', 'poetry.lock', 'uv.lock', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'eslint.config.js', '.eslintrc', 'vite.config.ts', 'next.config.js']);
 
 async function text(file: string): Promise<string> { return readFile(file, 'utf8'); }
 function dependencyNames(pkg: any): Set<string> { return new Set(Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies })); }
@@ -34,10 +34,10 @@ export async function detectStack(root: string): Promise<StackDetection> {
     evidence.push({ kind: 'sensitive_configuration', source: file, detail: 'Environment file present; contents were not read or returned' });
   }
   const packageManagers: string[] = [];
-  for (const [file, manager] of [['package-lock.json', 'npm'], ['pnpm-lock.yaml', 'pnpm'], ['yarn.lock', 'yarn'], ['poetry.lock', 'poetry']] as const) {
+  for (const [file, manager] of [['package-lock.json', 'npm'], ['pnpm-lock.yaml', 'pnpm'], ['yarn.lock', 'yarn'], ['poetry.lock', 'poetry'], ['uv.lock', 'uv']] as const) {
     if (baseNames.has(file)) { packageManagers.push(manager); evidence.push({ kind: 'package_manager', source: file, detail: manager }); }
   }
-  if (baseNames.has('requirements.txt') || (baseNames.has('pyproject.toml') && !baseNames.has('poetry.lock'))) {
+  if (baseNames.has('requirements.txt') || (baseNames.has('pyproject.toml') && !baseNames.has('poetry.lock') && !baseNames.has('uv.lock'))) {
     packageManagers.push('pip'); evidence.push({ kind: 'package_manager', source: baseNames.has('requirements.txt') ? 'requirements.txt' : 'pyproject.toml', detail: 'pip' });
   }
 
