@@ -14,6 +14,19 @@ npm install
 npm run build
 ```
 
+### Install for a project
+
+From the target Git repository, run:
+
+```bash
+npx -y devbrain-mcp@latest setup --yes
+npx -y devbrain-mcp@latest doctor --json
+```
+
+Setup installs a repository-scoped runtime under the user DevBrain home, writes only the DevBrain section in the repository's Codex configuration, preserves unrelated settings, performs an MCP handshake, and reports the 26-tool count. Restart Codex after setup so it reconnects. `--json` returns the package version, installation scope, configuration path, workspace root, preflight, handshake, restart, and next-action fields. Use `--dry-run` to inspect the plan. Global mode is intentionally unsupported because this server binds to one workspace per configuration.
+
+The installed launcher never points at the temporary npx cache. The durable runtime is replaced transactionally and failed activation restores the previous runtime/configuration. `devbrain uninstall --yes` removes only DevBrain-owned configuration.
+
 Run the server over stdio with `npm start`. Set `DEVBRAIN_WORKSPACE_ROOT` to the directory DevBrain may inspect; it defaults to the process working directory.
 
 ```json
@@ -292,6 +305,17 @@ Repositories, packages/workspaces, modules, files, and symbols remain distinct n
 - Structured parsing depends on output the repository already produces. Otherwise DevBrain degrades honestly to text or exit-code evidence.
 - Package-manager and runtime availability can make a capability unsupported or leave version provenance unknown.
 - Docker results are a point-in-time observation, not proof of future health or isolation.
+
+## Phase 5 ? Distribution and environment hardening
+
+Phase 5 adds lifecycle administration outside the MCP tool surface:
+
+- `devbrain setup` discovers the Git root, validates Node/server/workspace paths, completes an MCP preflight, and installs repository-local configuration transactionally.
+- `devbrain doctor` performs read-only DB001?DB011 environment and configuration checks; `--json` returns the stable machine-readable report.
+- `devbrain doctor --repair` proposes evidence-backed paired path repairs, requires `--yes` for mutation, backs up first, validates afterward, and rolls back failure.
+- `devbrain uninstall` removes only DevBrain-owned MCP sections and preserves other Codex configuration.
+
+All mutation commands support `--dry-run`. A newly generated `required = true` definition is blocked unless preflight succeeds. See [the lifecycle administration guide](./docs/phase5-lifecycle.md) for configuration discovery, exit codes, Windows behavior, recovery, and security boundaries.
 
 ## Development
 

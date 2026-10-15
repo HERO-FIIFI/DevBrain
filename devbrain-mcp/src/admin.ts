@@ -5,11 +5,13 @@ import {approve,approvalPath,listApprovals,loadRegistry,revoke} from './executio
 import {readJson} from './execution/home.js';
 import {repositoryIdentity} from './execution/trust/repository-identity.js';
 import type {ApprovalRequest,Capability} from './execution/types.js';
+import {runLifecycleCli} from './lifecycle/cli.js';
 
-const usage='Usage: devbrain approve <approval-id> | trust list | trust inspect <repo> | trust revoke <repo> [capability] | approval list | approval inspect <approval-id>';
+const usage='Usage: devbrain setup | doctor [--repair] | uninstall [lifecycle options] | approve <approval-id> | trust list | trust inspect <repo> | trust revoke <repo> [capability] | approval list | approval inspect <approval-id>';
 export async function main(args:string[],write:(line:string)=>void=console.log):Promise<number>{
   try{
     const [command,action,value,capability]=args;
+    if(command==='setup'||command==='doctor'||command==='uninstall')return runLifecycleCli(args,{cwd:process.cwd(),write});
     if(command==='approve'&&action){const request=await approve(action);write(JSON.stringify({approvalId:request.approvalId,status:request.status,repositoryId:request.repository.repositoryId,capability:request.capability}));return 0;}
     if(command==='trust'&&action==='list'){const registry=await loadRegistry();write(JSON.stringify(Object.values(registry.repositories).map((entry)=>({repositoryId:entry.repository.repositoryId,repositoryRoot:entry.repository.repositoryRoot,capabilities:Object.keys(entry.capabilities)})),null,2));return 0;}
     if(command==='trust'&&action==='inspect'&&value){const identity=await repositoryIdentity(value);write(JSON.stringify((await loadRegistry()).repositories[identity.repositoryId]??{repository:identity,capabilities:{}},null,2));return 0;}

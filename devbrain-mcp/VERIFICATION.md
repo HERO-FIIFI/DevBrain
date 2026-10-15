@@ -306,3 +306,39 @@ Verified on 2026-09-20 against the working tree intended for the Phase 4 baselin
 - Phase 3 baseline: `2bafdbd8fc74053feb5ac803aea9641fdbebd821` (`v0.3.0-phase3`).
 - Final documentation SHA: the commit containing this necessarily self-referential line; resolve it without fabrication as the commit target of `v0.4.0-phase4` (`git rev-list -n 1 v0.4.0-phase4`).
 - Final tag: annotated `v0.4.0-phase4`, identifying the documentation-complete baseline after the final clean-tree gates pass.
+
+---
+
+# Phase 5 ? Distribution and Environment Hardening
+
+Verified on 2026-10-15 on branch `phase5/distribution-environment-hardening`, based directly on `d2f92462a650123304d3d7c0f1c8c5acc6e4a249` / `v0.4.0-phase4`.
+
+## Implemented lifecycle
+
+- `devbrain setup`: Git-root discovery, path/config validation, real MCP initialization plus `tools/list`, plan display, explicit authorization, backup, atomic installation, reread verification.
+- `devbrain doctor`: read-only DB001?DB011 checks, human and JSON output, exit codes 0/1/2/3.
+- `devbrain doctor --repair`: deterministic paired `cwd`/`DEVBRAIN_WORKSPACE_ROOT` repair from independently verified Git evidence, dry-run, backup, transaction, validation, rollback.
+- `devbrain uninstall`: section-scoped removal of only DevBrain-owned MCP configuration.
+
+No Phase 5 MCP tool was added. `src/index.ts`, `evals.xml`, the 26-tool surface, and 20 evaluations remain unchanged.
+
+## Regression and incident evidence
+
+- Lifecycle suite: **PASS** ? 10 files / 44 tests, including a manifest mapping all 30 mandatory regressions to executable behavioral tests.
+- Exact incident: **PASS** ? `C:\Users\Administrator\Documents\Documents\Automations 2026\IA PROJECTS\Aura-main` fails DB002/DB003/DB011 before activation.
+- Parent workspace/nested repository: **PASS** ? one immediate nested Git root is independently resolved with Git and DB005 remains an explicit warning.
+- Authorized repair: **PASS** ? both path fields become the canonical nested Git root, a sibling backup is created, and unrelated MCP/settings remain.
+- Failed transactions: **PASS** ? pre-rename failure preserves originals; failed reread validation restores exact original bytes; failed new-file validation removes the candidate.
+- Probe safety: **PASS** ? missing runtime/server/cwd, nonzero exit, timeout, descendant cleanup, redaction, real MCP initialization, and capability listing are covered.
+
+## Quality gates
+
+Final command evidence is recorded in the Phase 5 completion report. Expected acceptance baseline after implementation is 37 test files / 165 tests, lint PASS, build PASS, 26 tools, and 20 evaluations.
+
+## Residual risks
+
+- The conservative TOML parser intentionally rejects unsupported syntax rather than risking destructive edits.
+- Immediate nested-repository discovery refuses ambiguity when multiple nested Git roots exist.
+- Atomic rename, realpath, junction, and process-tree semantics ultimately depend on the host filesystem and operating system.
+- MCP preflight is point-in-time evidence for the selected runtime, server, and root; later IDE permissions or environment can differ.
+- No dependency versions were changed as part of Phase 5; package-audit findings, if any, remain a separate dependency-maintenance decision.
