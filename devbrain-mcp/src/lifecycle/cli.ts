@@ -13,14 +13,14 @@ import {probeMcp,type ProbeOptions,type ProbeResult} from './probe.js';
 import {executeLifecyclePlan,planRepair,planSetup,planUninstall,type LifecyclePlan} from './service.js';
 import {parseCodexConfig,readDevbrainDefinition} from './toml.js';
 
-export interface LifecycleArgs{command:'setup'|'doctor'|'uninstall';repair:boolean;workspace?:string;config?:string;server?:string;packageSpec?:string;scope:'project'|'global';dryRun:boolean;json:boolean;yes:boolean}
+export interface LifecycleArgs{command:'setup'|'doctor'|'uninstall';repair:boolean;upgrade:boolean;validate:boolean;workspace?:string;config?:string;server?:string;packageSpec?:string;scope:'project'|'global';dryRun:boolean;json:boolean;yes:boolean}
 export interface LifecycleIo{cwd:string;home?:string;write:(line:string)=>void;installPackage?:RuntimeInstallOptions['install'];probe?:(options:ProbeOptions)=>Promise<ProbeResult>}
 const valueFlags=new Set(['--workspace','--config','--server','--package','--scope']);
-const boolFlags=new Set(['--repair','--dry-run','--json','--yes']);
+const boolFlags=new Set(['--repair','--upgrade','--validate','--dry-run','--json','--yes']);
 
 export function parseLifecycleArgs(args:string[]):LifecycleArgs{
   const command=args[0];if(!['setup','doctor','uninstall'].includes(command))throw new Error('UNKNOWN_COMMAND');
-  const parsed:LifecycleArgs={command:command as LifecycleArgs['command'],repair:false,scope:'project',dryRun:false,json:false,yes:false};
+  const parsed:LifecycleArgs={command:command as LifecycleArgs['command'],repair:false,upgrade:false,validate:false,scope:'project',dryRun:false,json:false,yes:false};
   for(let index=1;index<args.length;index++){
     const flag=args[index];
     if(valueFlags.has(flag)){
@@ -28,10 +28,10 @@ export function parseLifecycleArgs(args:string[]):LifecycleArgs{
       if(flag==='--workspace')parsed.workspace=value;if(flag==='--config')parsed.config=value;if(flag==='--server')parsed.server=value;if(flag==='--package')parsed.packageSpec=value;
       if(flag==='--scope'){if(value!=='project'&&value!=='global')throw new Error('INVALID_SCOPE');parsed.scope=value;}
     }else if(boolFlags.has(flag)){
-      if(flag==='--repair')parsed.repair=true;if(flag==='--dry-run')parsed.dryRun=true;if(flag==='--json')parsed.json=true;if(flag==='--yes')parsed.yes=true;
+      if(flag==='--repair')parsed.repair=true;if(flag==='--upgrade')parsed.upgrade=true;if(flag==='--validate')parsed.validate=true;if(flag==='--dry-run')parsed.dryRun=true;if(flag==='--json')parsed.json=true;if(flag==='--yes')parsed.yes=true;
     }else throw new Error(`UNKNOWN_OPTION:${flag}`);
   }
-  if(parsed.repair&&parsed.command!=='doctor')throw new Error('REPAIR_ONLY_VALID_WITH_DOCTOR');
+  if(parsed.repair&&parsed.command!=='doctor')throw new Error('REPAIR_ONLY_VALID_WITH_DOCTOR');if((parsed.upgrade||parsed.validate)&&parsed.command!=='setup')throw new Error('UPGRADE_OR_VALIDATE_ONLY_VALID_WITH_SETUP');if(parsed.upgrade&&parsed.validate)throw new Error('UPGRADE_AND_VALIDATE_ARE_MUTUALLY_EXCLUSIVE');
   if((parsed.packageSpec||parsed.scope!=='project')&&parsed.command!=='setup')throw new Error('INSTALL_OPTION_ONLY_VALID_WITH_SETUP');
   if(parsed.packageSpec&&parsed.server)throw new Error('PACKAGE_AND_SERVER_ARE_MUTUALLY_EXCLUSIVE');
   return parsed;
@@ -48,7 +48,7 @@ function diagnosticText(value:string|undefined):string|undefined{
   if(!value)return undefined;
   return redact(value).replace(/(?:[A-Za-z]:[\\/]|\\\\|\/)[^\s"'<>]+/g,'[PATH]');
 }
-function installResult(input:{status:string;identity:{name:string;version:string};config:string;repositoryRoot:string;runtimeRoot:string;server:string;probe?:ProbeResult;reused?:boolean}){
+function installResult(input:{status:string;identity:{name:string;version:string};config:string;repositoryRoot:string;runtimeRoot:string;server:string;probe?:ProbeResult;reused?:boolean;configurationChanged?:boolean}){
   const probeFailure=input.probe&&!input.probe.ok?{
     failureStage:'staged_runtime_mcp_probe',
     failureCode:input.probe.reason,
@@ -57,20 +57,26 @@ function installResult(input:{status:string;identity:{name:string;version:string
     ...(diagnosticText(input.probe.detail)?{probeDetail:diagnosticText(input.probe.detail)}:{}),
     probeExitCode:input.probe.exitCode,
   }:{};
-  return redact({schemaVersion:1,status:input.status,packageName:input.identity.name,packageVersion:input.identity.version,installationScope:'project',installationRoot:input.runtimeRoot,serverPath:input.server,configurationPath:input.config,effectiveWorkspaceRoot:input.repositoryRoot,preflightStatus:input.probe?.ok?'PASS':input.probe?'FAIL':'PENDING',mcpHandshakeStatus:input.probe?.ok?'PASS':input.probe?'FAIL':'PENDING',toolCount:input.probe?.toolCount??null,reused:input.reused??false,restartRequired:input.status==='READY',nextAction:input.status==='READY'?'Restart Codex so it reconnects to the newly registered MCP server.':'No configuration was changed.',verifyCommand:`npx -y ${input.identity.name}@latest doctor --workspace ${JSON.stringify(input.repositoryRoot)} --json`,...probeFailure});
+  return redact({schemaVersion:1,status:input.status,packageName:input.identity.name,packageVersion:input.identity.version,installationScope:'project',installationRoot:input.runtimeRoot,serverPath:input.server,configurationPath:input.config,effectiveWorkspaceRoot:input.repositoryRoot,preflightStatus:input.probe?.ok?'PASS':input.probe?'FAIL':'PENDING',mcpHandshakeStatus:input.probe?.ok?'PASS':input.probe?'FAIL':'PENDING',toolCount:input.probe?.toolCount??null,reused:input.reused??false,configurationChanged:input.configurationChanged??input.status==='READY',restartRequired:input.status==='READY',nextAction:input.status==='READY'?'Restart Codex so it reconnects to the newly registered MCP server.':'No configuration was changed.',verifyCommand:`npx -y ${input.identity.name}@latest doctor --workspace ${JSON.stringify(input.repositoryRoot)} --json`,...probeFailure});
 }
+
+function samePath(left:string,right:string):boolean{return (process.platform==='win32'?left.toLowerCase():left).replace(/\\/g,'/')===(process.platform==='win32'?right.toLowerCase():right).replace(/\\/g,'/');}
+async function targetDefinition(config:string){try{const parsed=parseCodexConfig(await text(config));if(!parsed.ok)throw new Error(`MALFORMED_TOML:${config}`);return readDevbrainDefinition(parsed);}catch(error:any){if(error?.code==='ENOENT')return undefined;throw error;}}
 
 async function runDistributedSetup(args:LifecycleArgs,io:LifecycleIo,workspace:string,repositoryRoot:string,config:string,node:string):Promise<number>{
   if(args.scope==='global')throw new Error('GLOBAL_SCOPE_UNSUPPORTED');
   const identity=await readPackageIdentity();const runtimeRoot=projectRuntimeRoot(io.home??os.homedir(),repositoryRoot);const server=path.join(runtimeRoot,'node_modules',...identity.name.split('/'),'dist','index.js');
   if(!args.yes||args.dryRun){const status=args.dryRun?'DRY_RUN':'CONFIRMATION_REQUIRED';const result=installResult({status,identity,config,repositoryRoot,runtimeRoot,server});io.write(args.json?JSON.stringify(result,null,2):`DevBrain setup\n\nSTATUS: ${status}\nPACKAGE: ${identity.name}@${identity.version}\nINSTALLATION: ${runtimeRoot}\nCONFIGURATION: ${config}\n\n${args.dryRun?'No files were changed.':'Run again with --yes to install and configure DevBrain.'}`);return args.dryRun?0:2;}
+  const current=await targetDefinition(config);const alreadyCurrent=Boolean(current?.command==='node'&&current.args.length===1&&samePath(current.args[0],server));
+  if(current&&!alreadyCurrent&&!args.upgrade&&!args.validate){io.write(JSON.stringify({...installResult({status:'NOT_READY',identity,config,repositoryRoot,runtimeRoot,server,configurationChanged:false}),failureStage:'existing_project_config',failureCode:'UPGRADE_REQUIRED',nextAction:'Run setup again with --upgrade to transactionally replace the existing DevBrain project definition.'},null,args.json?2:0));return 2;}
   const prepared=await prepareProjectRuntime({home:io.home??os.homedir(),repositoryRoot,packageIdentity:identity,packageSpec:args.packageSpec??`${identity.name}@${identity.version}`,...(io.installPackage?{install:io.installPackage}:{})});
   const probe=io.probe??probeMcp;const stagedProbe=await probe({node,server:prepared.server,cwd:repositoryRoot,workspaceRoot:repositoryRoot,timeoutMs:5000});
   if(!stagedProbe.ok){await discardPreparedRuntime(prepared);io.write(JSON.stringify(installResult({status:'NOT_READY',identity,config,repositoryRoot,runtimeRoot,server,probe:stagedProbe}),null,args.json?2:0));return 2;}
+  if(args.validate){await discardPreparedRuntime(prepared);io.write(JSON.stringify(installResult({status:'VALIDATED',identity,config,repositoryRoot,runtimeRoot,server,probe:stagedProbe,reused:prepared.status==='reused',configurationChanged:false}),null,args.json?2:0));return 0;}
   const active=await activateProjectRuntime(prepared);
   try{
-    const existingDefinitions=await definitions(io.home??os.homedir(),workspace,repositoryRoot,config);const finalProbe=await probe({node,server:active.server,cwd:repositoryRoot,workspaceRoot:repositoryRoot,timeoutMs:5000});
-    const plan=await planSetup({config,workspace,repositoryRoot,server:active.server,node,mcpProbe:finalProbe,existingDefinitions});
+    const finalProbe=await probe({node,server:active.server,cwd:repositoryRoot,workspaceRoot:repositoryRoot,timeoutMs:5000});
+    const plan=await planSetup({config,workspace,repositoryRoot,server:active.server,node,mcpProbe:finalProbe,existingDefinitions:[]});
     const execution=await executeLifecyclePlan(plan,{authorized:true,postCheck:async()=>Boolean((await probe({node,server:active.server,cwd:repositoryRoot,workspaceRoot:repositoryRoot,timeoutMs:5000})).ok)});
     if(!['committed','unchanged'].includes(execution.status)){await rollbackProjectRuntime(active);io.write(JSON.stringify(redact({status:'NOT_READY',execution}),null,args.json?2:0));return 2;}
     await commitProjectRuntime(active);const result=installResult({status:'READY',identity,config,repositoryRoot,runtimeRoot:active.runtimeRoot,server:active.server,probe:finalProbe,reused:prepared.status==='reused'});io.write(args.json?JSON.stringify(result,null,2):`DevBrain setup complete.\nConfiguration: ${config}\nWorkspace: ${repositoryRoot}\nMCP tools: ${finalProbe.toolCount??'unknown'}\nRestart Codex, then run:\n${result.verifyCommand}`);return 0;
