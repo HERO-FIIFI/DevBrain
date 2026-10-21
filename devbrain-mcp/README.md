@@ -363,6 +363,6 @@ See [VERIFICATION.md](./VERIFICATION.md) for executed quality and acceptance evi
 
 ## Status
 
-Current package line: `0.6.0-rc.1`.
+Current package line: `0.7.0`.
 
 This is a release candidate. Review the verification record and security boundaries before enabling trusted execution in a new environment.

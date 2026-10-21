@@ -33,7 +33,7 @@ describe('path safety',()=>{
 
   it('distinguishes directories, files, missing paths and unicode paths',async()=>{
     temp=await mkdtemp(path.join(os.tmpdir(),'devbrain-path-'));
-    const unicode=path.join(temp,'r?pertoire ??');await mkdir(unicode);const file=path.join(temp,'file.txt');await writeFile(file,'x');
+    const unicodeName=String.fromCodePoint(0x72,0xe9,0x70,0x65,0x72,0x74,0x6f,0x69,0x72,0x65,0x20,0x2605,0x4e2d);const unicode=path.join(temp,unicodeName);await mkdir(unicode);const file=path.join(temp,'file.txt');await writeFile(file,'x');
     expect(await inspectDirectory(unicode)).toMatchObject({status:'PASS',exists:true,isDirectory:true,canonicalPath:expect.any(String)});
     expect(await inspectDirectory(file)).toMatchObject({status:'FAIL',exists:true,isDirectory:false,reason:'NOT_DIRECTORY'});
     expect(await inspectDirectory(path.join(temp,'missing'))).toMatchObject({status:'FAIL',exists:false,isDirectory:false,reason:'NOT_FOUND'});

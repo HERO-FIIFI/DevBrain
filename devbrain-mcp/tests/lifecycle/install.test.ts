@@ -6,7 +6,7 @@ import {activateProjectRuntime,commitProjectRuntime,prepareProjectRuntime,rollba
 let temp='';
 afterEach(async()=>{if(temp)await rm(temp,{recursive:true,force:true});temp='';});
 async function fixture(){temp=await mkdtemp(path.join(os.tmpdir(),'devbrain-install-'));const home=path.join(temp,'home with spaces');const repo=path.join(temp,'repo with spaces');await mkdir(repo,{recursive:true});return {home,repo};}
-const packageIdentity={name:'devbrain-mcp',version:'0.6.0-rc.1'};
+const packageIdentity={name:'devbrain-mcp',version:'0.7.0'};
 const fakeInstall=async(stage:string)=>{const root=path.join(stage,'node_modules','devbrain-mcp');await mkdir(path.join(root,'dist'),{recursive:true});await writeFile(path.join(root,'package.json'),JSON.stringify(packageIdentity));await writeFile(path.join(root,'dist','index.js'),'// server');};
 
 describe('durable project runtime',()=>{
