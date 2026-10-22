@@ -32,13 +32,29 @@ DISCOVER  →  RESOLVE  →  AUTHORIZE  →  EXECUTE  →  PARSE  →  EVIDENCE
 From the root of a Git repository, run:
 
 ```bash
-npx -y devbrain-mcp@rc setup --yes
-npx -y devbrain-mcp@rc doctor --json
+npx -y devbrain-mcp@0.7.1 setup --yes
+npx -y devbrain-mcp@0.7.1 doctor --json
 ```
 
 Setup installs a persistent project-scoped runtime under the user DevBrain home, writes only the DevBrain-owned section in the repository's Codex configuration, preserves unrelated settings, performs an MCP handshake, and reports the 26-tool count. Restart Codex after setup so it reconnects. `--json` returns package, installation, workspace, preflight, handshake, and next-action fields. Use `--dry-run` to inspect the plan. Global mode is intentionally unsupported because this server binds to one workspace per configuration.
 
 The installed launcher never points at the temporary npx cache. The durable runtime is replaced transactionally and failed activation restores the previous runtime/configuration. `devbrain uninstall --yes` removes only DevBrain-owned configuration.
+
+### Existing installations and dry validation
+
+DevBrain never silently replaces an existing project DevBrain definition. If setup reports `UPGRADE_REQUIRED`, inspect the target with `--dry-run`, then explicitly authorize the transactional replacement:
+
+```bash
+npx -y devbrain-mcp@0.7.1 setup --upgrade --yes --json
+```
+
+`--upgrade` preserves unrelated MCP entries and rolls the exact configuration back if the staged runtime or post-write probe fails. To test a candidate runtime without persisting a runtime or configuration change, use:
+
+```bash
+npx -y devbrain-mcp@0.7.1 setup --validate --yes --json
+```
+
+`--upgrade` and `--validate` are mutually exclusive. `--validate` reports validation evidence only; it is not an installation.
 
 Run the server over stdio with `npm start`. Set `DEVBRAIN_WORKSPACE_ROOT` to the directory DevBrain may inspect; it defaults to the process working directory.
 
@@ -332,6 +348,18 @@ Repositories, packages/workspaces, modules, files, and symbols remain distinct n
 - Package-manager and runtime availability can make a capability unsupported or leave version provenance unknown.
 - Docker results are a point-in-time observation, not proof of future health or isolation.
 
+## Verification receipts
+
+`devbrain_get_execution_evidence` keeps raw execution evidence available by execution ID. Its additive `view: "receipt"` returns a compact, sanitized result for one recorded test, targeted test, lint, or build execution. `view: "summary"` combines supplied execution IDs and marks each verification category as passed, failed, timed out, cancelled, unknown, or not verified. Missing or truncated evidence remains explicit; a receipt never turns absent evidence into a pass.
+
+## Context budget advisor and session handoff
+
+`devbrain_context_pack` accepts an optional token budget and returns deterministic token estimates, largest contributors, exclusions, and advice. Estimates are byte-based guidance, not measured model-token usage. With `view: "handoff"`, the same bounded context workflow adds a sanitized session handoff: repository identity, change state, relevant verification evidence, and omissions when its size budget is reached.
+
+## Change risk score
+
+`devbrain_change_impact` adds a deterministic `riskAssessment` to its static impact report. The score is a bounded heuristic based on observed repository evidence, known dependency reach, related test evidence, and explicit unknowns. It is not a prediction of production failure or release approval.
+
 ## Phase 5 — Distribution and environment hardening
 
 Phase 5 adds lifecycle administration outside the MCP tool surface:
@@ -363,6 +391,6 @@ See [VERIFICATION.md](./VERIFICATION.md) for executed quality and acceptance evi
 
 ## Status
 
-Current package line: `0.7.0`.
+Current stable package line: `0.7.1`.
 
-This is a release candidate. Review the verification record and security boundaries before enabling trusted execution in a new environment.
+Review the verification record and security boundaries before enabling trusted execution in a new environment.

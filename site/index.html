@@ -196,10 +196,11 @@ section{padding-block:clamp(3.5rem,8vw,6.5rem);border-top:1px solid var(--line)}
       <div class="cta">
         <a class="btn btn-primary" href="#install">Install locally</a>
         <a class="btn btn-ghost" href="https://www.npmjs.com/package/devbrain-mcp" target="_blank" rel="noopener">View on npm</a>
+        <a class="btn btn-ghost" href="https://github.com/HERO-FIIFI/DevBrain" target="_blank" rel="noopener">View on GitHub</a>
         <a class="btn btn-ghost" href="#security">Read the security model</a>
       </div>
       <div class="facts" aria-label="At a glance">
-        <span>v0.6.0-rc.1</span><span>26 MCP tools</span><span>Project-scoped setup</span><span>Node 20+</span>
+        <span>v0.7.1</span><span>26 MCP tools</span><span>Project-scoped setup</span><span>Node 20+</span>
       </div>
     </div>
 
@@ -296,17 +297,17 @@ section{padding-block:clamp(3.5rem,8vw,6.5rem);border-top:1px solid var(--line)}
     </div>
     <div class="steps">
       <div class="step">
-        <div><h3>Run setup</h3><p>From the root of a Git repository, install the release candidate with the one-command setup. It downloads the package through npm and configures the current project.</p></div>
+        <div><h3>Run setup</h3><p>From the root of a Git repository, install the stable release with the one-command setup. It downloads the package through npm and configures the current project.</p></div>
         <div class="code">
           <button class="copy" type="button" data-copy aria-label="Copy setup command">Copy</button>
-<pre><code>npx -y devbrain-mcp@rc setup --yes</code></pre>
+<pre><code>npx -y devbrain-mcp@0.7.1 setup --yes</code></pre>
         </div>
       </div>
       <div class="step">
         <div><h3>Check readiness</h3><p>Run the built-in doctor from the same repository. It reports the Git root, workspace boundary, persisted runtime, and exposed tool count without changing your source files.</p></div>
         <div class="code">
           <button class="copy" type="button" data-copy aria-label="Copy doctor command">Copy</button>
-<pre><code>npx -y devbrain-mcp@rc doctor --json</code></pre>
+<pre><code>npx -y devbrain-mcp@0.7.1 doctor --json</code></pre>
         </div>
       </div>
       <div class="step">
@@ -358,9 +359,11 @@ section{padding-block:clamp(3.5rem,8vw,6.5rem);border-top:1px solid var(--line)}
   <div class="wrap">
     <div class="left">
       <a class="wordmark" href="#">DevBrain <small>MCP</small></a>
-      <small>Repository intelligence and trusted execution for coding agents. v0.6.0-rc.1.</small>
+      <small>Repository intelligence and trusted execution for coding agents. v0.7.1.</small>
     </div>
     <ul class="makers" aria-label="Made by">
+      <li><a href="https://github.com/HERO-FIIFI/DevBrain" rel="noopener">GitHub</a></li>
+      <li><a href="https://www.npmjs.com/package/devbrain-mcp" rel="noopener">npm</a></li>
       <li><a href="https://fiifiandy.dev" rel="noopener"><span class="logo-af" aria-hidden="true">AF<b>.</b></span><span>fiifiandy.dev</span></a></li>
       <li><a href="https://seamsoftlabs.com" rel="noopener">
         <svg class="logo-seam" viewBox="0 0 40 40" aria-hidden="true">
