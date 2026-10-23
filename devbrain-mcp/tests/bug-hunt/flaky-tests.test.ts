@@ -72,6 +72,19 @@ describe('bug-hunt stability classifier', () => {
     });
   });
 
+  it('keeps the five-attempt discrimination boundary within budget', () => {
+    const classification = classifyStability([
+      failed('exec-1'),
+      passed('exec-2'),
+      failed('exec-3'),
+      passed('exec-4'),
+      failed('exec-5'),
+    ]);
+    expect(classification.violations).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'FLAKINESS_DISCRIMINATION_BUDGET_EXHAUSTED' }),
+    ]));
+  });
+
   it('reports the five-attempt flakiness discrimination budget when a sixth run is supplied', () => {
     expect(classifyStability([
       failed('exec-1'),

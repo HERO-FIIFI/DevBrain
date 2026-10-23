@@ -12,6 +12,9 @@ const EVENT_TYPES = new Set([
 ]);
 const VERIFICATION_TYPES = new Set(['verification_failed', 'verification_passed']);
 const FIX_ATTEMPT_MAXIMUM = 2;
+// Three total runs are enough to label mixed outcomes as suspected flakiness;
+// extending that series is bounded at five attempts for discrimination.
+const STABILITY_ATTEMPT_MAXIMUM = 5;
 const ATTEMPT_RESULTS = new Set(['passed', 'failed', 'blocked', 'unavailable']);
 const STRONG_CONFIDENCE = new Set(['high', 'medium']);
 // A bounded run series classifies; it never estimates. These claims are refused outright.
@@ -327,12 +330,16 @@ function stabilityConfidence(kind) {
   return kind === 'UNKNOWN' ? 'unknown' : 'medium';
 }
 
-function stabilityKind(failures, passes, signatureGroups, environmentCorrelation) {
+function stabilityKind(failures, passes, signatureGroups, environmentCorrelation, attemptCount, hasEnvironmentClue) {
   if (failures.length === 0) return 'UNKNOWN';
   if (signatureGroups.length > 1) return 'REPEATED_INSTABILITY';
   if (environmentCorrelation.correlated) return 'ENVIRONMENTAL_FAILURE';
   if (failures.length === 1) return passes.length > 0 ? 'SUSPECTED_FLAKY' : 'UNKNOWN';
-  return passes.length > 0 ? 'REPEATED_INSTABILITY' : 'DETERMINISTIC_FAILURE';
+  // A reported environment difference that cannot be corroborated is a
+  // divergent clue, so do not downgrade it to ordinary suspected flakiness.
+  return passes.length > 0
+    ? (hasEnvironmentClue || attemptCount > 3 ? 'REPEATED_INSTABILITY' : 'SUSPECTED_FLAKY')
+    : 'DETERMINISTIC_FAILURE';
 }
 
 /**
@@ -347,7 +354,16 @@ export function classifyStability(attempts = []) {
     throw new Error('DUPLICATE_STABILITY_EXECUTION_ID');
   }
 
-  const violations = inferenceViolations(attempts);
+  const violations = [
+    ...inferenceViolations(attempts),
+    ...(attempts.length > STABILITY_ATTEMPT_MAXIMUM
+      ? [violation(
+        'FLAKINESS_DISCRIMINATION_BUDGET_EXHAUSTED',
+        `used ${attempts.length} stability attempts; maximum is ${STABILITY_ATTEMPT_MAXIMUM}`,
+        executionIds,
+      )]
+      : []),
+  ];
   if (attempts.length > 1 && seriesMismatch(attempts)) {
     return {
       kind: 'UNKNOWN',
@@ -373,7 +389,8 @@ export function classifyStability(attempts = []) {
 
   const signatureGroups = groupSignatures(failures);
   const environmentCorrelation = correlateEnvironment(failures, passes, limitations);
-  const kind = stabilityKind(failures, passes, signatureGroups, environmentCorrelation);
+  const hasEnvironmentClue = failures.some((attempt) => attempt.environmentDifference !== undefined);
+  const kind = stabilityKind(failures, passes, signatureGroups, environmentCorrelation, attempts.length, hasEnvironmentClue);
   if (kind === 'UNKNOWN' && failures.length === 1) {
     limitations.push('stability is unknown after one observed failure');
   }
